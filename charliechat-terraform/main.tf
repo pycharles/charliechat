@@ -66,7 +66,11 @@ resource "aws_lexv2models_intent" "fallback" {
   bot_id       = aws_lexv2models_bot.charlie.id
   bot_version  = "DRAFT"
   locale_id    = aws_lexv2models_bot_locale.en_us.locale_id
-  name         = "AMAZON.FallbackIntent"
+  name         = "CharlieFallbackIntent"
+
+  fulfillment_code_hook {
+    enabled = false
+  }
 
 }
 
