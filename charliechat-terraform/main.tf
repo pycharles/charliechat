@@ -62,30 +62,6 @@ resource "aws_lexv2models_bot_locale" "en_us" {
   }
 }
 
-resource "aws_lexv2models_intent" "fallback" {
-  bot_id       = aws_lexv2models_bot.charlie.id
-  bot_version  = "DRAFT"
-  locale_id    = aws_lexv2models_bot_locale.en_us.locale_id
-  name         = "CharlieFallbackIntent"
-
-  fulfillment_code_hook {
-    enabled = false
-  }
-
-}
-
-resource "aws_lexv2models_intent" "intro" {
-  bot_id      = aws_lexv2models_bot.charlie.id
-  bot_version = "DRAFT"
-  locale_id   = aws_lexv2models_bot_locale.en_us.locale_id
-  name        = "ChatIntent"
-
-
-  fulfillment_code_hook {
-    enabled = false
-  }
-
-}
 
 resource "aws_lexv2models_bot_version" "v1" {
   bot_id = aws_lexv2models_bot.charlie.id
@@ -97,7 +73,7 @@ resource "aws_lexv2models_bot_version" "v1" {
 }
 
 # Note: aws_lexv2models_bot_alias is not yet supported in the AWS provider
-# The bot can be used directly with the version reference
+# Note: removing intents since terraform support is limited
 
 
 

@@ -47,6 +47,18 @@ curl -s -X POST http://localhost:8000/chat \
   -d '{"session_id":"local-test","text":"Hello!"}' | jq
 ```
 
+
+### Terraform does not support Lex V2 bot aliases
+```bash
+sudo apt install awscli
+aws configure
+aws lexv2-models create-bot-alias \
+  --bot-id $LEX_BOT_ID \
+  --bot-version 1 \
+  --bot-alias-name live \
+  --description "Live alias for Charlie bot"
+```
+
 ### Notes
 - The Terraform bot includes a basic `ChatIntent` and fallback intent with a greeting.
 - Customize intents, slots, and responses in `charliechat-terraform/main.tf` to reflect your experience and Q&A.
