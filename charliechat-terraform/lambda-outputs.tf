@@ -10,5 +10,5 @@ output "lambda_function_arn" {
 
 output "lambda_function_url" {
   description = "Lambda function URL (direct access)"
-  value       = try(aws_lambda_function_url.charlie_api_url[0].function_url, null)
+  value       = try(aws_lambda_function_url.charlie_api_url.function_url, null)
 }
