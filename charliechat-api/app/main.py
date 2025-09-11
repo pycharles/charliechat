@@ -92,11 +92,8 @@ async def chat(request: Request, session_id: str | None = Form(None), text: str 
             user_safe = html_escape(effective_text)
             bot_safe = html_escape(raw_bot_text)
 
-            # Return HTML fragment to append to chat log
-            html = (
-                f'<div class="message message-user"><div class="bubble">{user_safe}</div></div>'
-                f'<div class="message message-bot"><div class="bubble">{bot_safe}</div></div>'
-            )
+            # Return ONLY bot bubble to replace pending placeholder (targeted by hx-target)
+            html = f'<div class="message message-bot fade-in"><div class="bubble">{bot_safe}</div></div>'
             return HTMLResponse(content=html)
 
         # Handle JSON API
