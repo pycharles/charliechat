@@ -212,3 +212,8 @@ terraform.tfstate*
 
 # CSS maps
 *.css.map
+
+# Lambda build artifacts
+lambda-deployment.zip
+lambda_package/
+
