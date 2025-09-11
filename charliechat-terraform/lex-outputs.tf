@@ -14,4 +14,3 @@ output "lex_bot_locale_id" {
 }
 
 # Note: Bot alias not supported in current AWS provider version, used aws cli to get alias id for .env
-
