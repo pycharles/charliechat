@@ -1,0 +1,4 @@
+scss:
+	sass --watch app/static/scss:app/static/css
+
+

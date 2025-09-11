@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Charlie Chat</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+  </head>
+  <body>
+    <main class="page">
+      <section class="chat-wrapper">
+        <div class="chat" id="chat">
+          <div class="message message-bot">
+            <div class="bubble">Hi, I’m Charlie. Ask me anything.</div>
+          </div>
+        </div>
+
+        <form class="composer" hx-post="/chat" hx-target="#chat" hx-swap="beforeend" hx-trigger="submit" hx-reset="true" hx-on::after-request="this.reset()" hx-indicator="#indicator" hx-disabled-elt=".composer-input, .composer-send">
+          <input type="hidden" name="session_id" value="web-session">
+          <input class="composer-input" type="text" name="text" placeholder="Type your message..." autocomplete="off" required>
+          <button class="composer-send" type="submit">Send</button>
+        </form>
+        <div id="indicator" class="indicator" aria-live="polite" aria-atomic="true">
+          <div class="spinner" aria-hidden="true"></div>
+          <span class="indicator-text">Thinking…</span>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script>
+      // Keep input focused after submit for smoother chatting
+      document.addEventListener('htmx:afterOnLoad', function () {
+        const input = document.querySelector('.composer-input');
+        if (input) input.focus();
+        const chat = document.getElementById('chat');
+        if (chat) chat.scrollTop = chat.scrollHeight;
+      });
+    </script>
+  </body>
+  </html>
+
+
