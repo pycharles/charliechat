@@ -40,6 +40,12 @@ resource "aws_iam_role_policy_attachment" "lex_bot_full_access" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonLexFullAccess"
 }
 
+resource "aws_iam_role_policy_attachment" "lex_bot_bedrock_full_access" {
+  role       = aws_iam_role.lex_bot_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
+}
+
+
 resource "aws_lexv2models_bot" "charlie" {
   name                         = var.bot_name
   description                  = "Charlie virtual resume bot"
