@@ -5,6 +5,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from pathlib import Path
 from html import escape as html_escape
+import markdown
+import os
+from datetime import datetime
 
 from .config import get_settings
 from .lex_client import LexChatClient
@@ -32,6 +35,62 @@ class ChatResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+def load_journal_entries():
+    """Load and parse journal markdown files"""
+    journal_dir = BASE_DIR.parent / "journal-md"
+    entries = []
+    
+    if not journal_dir.exists():
+        return entries
+    
+    # Get all markdown files and sort by filename (which includes date)
+    md_files = sorted([f for f in journal_dir.glob("*.md")], reverse=True)
+    
+    for md_file in md_files:
+        try:
+            with open(md_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Extract title from first line (assumes # Title format)
+            lines = content.split('\n')
+            title = lines[0].lstrip('# ').strip() if lines[0].startswith('#') else md_file.stem
+            
+            # Extract date from filename (assumes YYYY-MM-DD format)
+            date_str = md_file.stem.split('-', 3)[:3]  # Get first 3 parts
+            if len(date_str) >= 3:
+                try:
+                    date_obj = datetime.strptime('-'.join(date_str), '%Y-%m-%d')
+                    formatted_date = date_obj.strftime('%B %d, %Y')
+                except ValueError:
+                    formatted_date = md_file.stem
+            else:
+                formatted_date = md_file.stem
+            
+            # Convert markdown to HTML
+            html_content = markdown.markdown(content, extensions=['fenced_code', 'tables'])
+            
+            entries.append({
+                'title': title,
+                'date': formatted_date,
+                'content': html_content,
+                'filename': md_file.name
+            })
+        except Exception as e:
+            print(f"Error loading {md_file}: {e}")
+            continue
+    
+    return entries
+
+
+@app.get("/blog", response_class=HTMLResponse)
+def blog(request: Request) -> HTMLResponse:
+    journal_entries = load_journal_entries()
+    return templates.TemplateResponse("blog.html", {
+        "request": request,
+        "journal_entries": journal_entries
+    })
 
 
 @app.get("/favicon.ico", include_in_schema=False)

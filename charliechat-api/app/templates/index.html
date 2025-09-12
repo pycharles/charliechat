@@ -39,6 +39,14 @@
           </div>
         </div>
 
+        <div class="chat-actions">
+          <a class="journal-button" href="/blog" aria-label="Dev Journal" title="Dev Journal">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+            </svg>
+            <span class="button-text">Dev Journal</span>
+          </a>
+        </div>
         <form class="composer" hx-post="/chat" hx-target="#chat" hx-swap="beforeend" hx-trigger="submit" hx-reset="true" hx-on::before-request="const chat=document.getElementById('chat'); const input=this.querySelector('.composer-input'); const text=(input && input.value || '').trim(); if(!text){event.preventDefault(); return;} const userDiv=document.createElement('div'); userDiv.className='message message-user fade-in'; userDiv.innerHTML='<div class=\'bubble\'></div>'; userDiv.querySelector('.bubble').textContent=text; chat.appendChild(userDiv); let pending=document.getElementById('bot-pending'); if(pending) pending.remove(); pending=document.createElement('div'); pending.id='bot-pending'; pending.className='message message-bot pending fade-in'; pending.innerHTML='<div class=\'bubble\'>…</div>'; chat.appendChild(pending); chat.scrollTop=chat.scrollHeight;" hx-on::after-request="this.reset()" hx-disabled-elt=".composer-input, .composer-send">
           <input type="hidden" name="session_id" value="web-session">
           <input class="composer-input" type="text" name="text" placeholder="Type your message..." autocomplete="off" required>
