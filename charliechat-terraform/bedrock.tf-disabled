@@ -1,0 +1,162 @@
+# Bedrock Knowledge Base for Charlie Chat
+# This configuration creates a knowledge base for document ingestion and retrieval
+
+#NOTE: This configuration is disabled because S3 as a vector store is not supported by the AWS provider
+#TODO: Enable this configuration once S3 as a vector store is supported by the AWS provider
+
+# IAM role for Bedrock Knowledge Base execution
+resource "aws_iam_role" "bedrock_knowledge_base_execution" {
+  name = "AmazonBedrockExecutionRoleForKnowledgeBase_charliechat"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "bedrock.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "Bedrock Knowledge Base Execution Role"
+    Environment = "production"
+    Project     = "charlie-chat"
+  }
+}
+
+# IAM policy for Bedrock Knowledge Base to access S3
+resource "aws_iam_policy" "bedrock_knowledge_base_s3_policy" {
+  name        = "BedrockKnowledgeBaseS3Policy_charliechat"
+  description = "Policy for Bedrock Knowledge Base to access S3 bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          aws_s3_bucket.bedrock_knowledge_base.arn,
+          "${aws_s3_bucket.bedrock_knowledge_base.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Attach S3 policy to Bedrock execution role
+resource "aws_iam_role_policy_attachment" "bedrock_knowledge_base_s3" {
+  role       = aws_iam_role.bedrock_knowledge_base_execution.name
+  policy_arn = aws_iam_policy.bedrock_knowledge_base_s3_policy.arn
+}
+
+# S3 bucket for Bedrock Knowledge Base data source
+resource "aws_s3_bucket" "bedrock_knowledge_base" {
+  bucket = "bedrock-knowledge-base-charliechat"
+
+  tags = {
+    Name        = "Bedrock Knowledge Base Data Source"
+    Environment = "production"
+    Project     = "charlie-chat"
+  }
+}
+
+# S3 bucket versioning
+resource "aws_s3_bucket_versioning" "bedrock_knowledge_base" {
+  bucket = aws_s3_bucket.bedrock_knowledge_base.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 bucket server-side encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "bedrock_knowledge_base" {
+  bucket = aws_s3_bucket.bedrock_knowledge_base.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# S3 bucket public access block
+resource "aws_s3_bucket_public_access_block" "bedrock_knowledge_base" {
+  bucket = aws_s3_bucket.bedrock_knowledge_base.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Bedrock Knowledge Base
+resource "aws_bedrockagent_knowledge_base" "charlie_chat" {
+  name     = "knowledge-base-charliechat"
+  role_arn = aws_iam_role.bedrock_knowledge_base_execution.arn
+
+  knowledge_base_configuration {
+    vector_knowledge_base_configuration {
+      embedding_model_arn = "arn:aws:bedrock:${data.aws_region.current.id}::foundation-model/amazon.titan-embed-text-v2:0"
+    }
+    type = "VECTOR"
+  }
+
+  storage_configuration {
+    type = "S3"
+    
+    s3_configuration {
+      bucket_arn = aws_s3_bucket.bedrock_knowledge_base.arn
+    }
+  }
+
+  tags = {
+    Name        = "Charlie Chat Knowledge Base"
+    Environment = "production"
+    Project     = "charlie-chat"
+  }
+}
+
+
+# Data source for the knowledge base
+resource "aws_bedrockagent_data_source" "charlie_chat" {
+  knowledge_base_id = aws_bedrockagent_knowledge_base.charlie_chat.id
+  name              = "bedrock-knowledge-base-charliechat"
+  description       = "Data source for Charlie Chat knowledge base"
+
+  data_source_configuration {
+    type = "S3"
+    
+    s3_configuration {
+      bucket_arn = aws_s3_bucket.bedrock_knowledge_base.arn
+    }
+  }
+
+  vector_ingestion_configuration {
+    chunking_configuration {
+      chunking_strategy = "FIXED_SIZE"
+      fixed_size_chunking_configuration {
+        max_tokens = 300
+        overlap_percentage = 20
+      }
+    }
+  }
+
+  tags = {
+    Name        = "Charlie Chat Data Source"
+    Environment = "production"
+    Project     = "charlie-chat"
+  }
+}
+
+# Data source for current AWS region
+data "aws_region" "current" {}
