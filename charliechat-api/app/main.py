@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from pathlib import Path
 from html import escape as html_escape
-import markdown
+import markdown # type: ignore - linter issue
 import os
 from datetime import datetime
 
@@ -14,6 +14,16 @@ from .lex_client import LexChatClient
 
 
 app = FastAPI(title="Charlie Chat API", version="0.1.0")
+
+# Middleware to redirect www.charlesob.com to charlesob.com for SEO normalization
+@app.middleware("http")
+async def redirect_to_root(request: Request, call_next):
+    host = request.headers.get("host", "")
+    if host == "www.charlesob.com":
+        # Redirect to root domain with 301 (permanent redirect)
+        url = str(request.url).replace("www.charlesob.com", "charlesob.com")
+        return RedirectResponse(url=url, status_code=301)
+    return await call_next(request)
 
 # Static files and templates setup
 BASE_DIR = Path(__file__).parent

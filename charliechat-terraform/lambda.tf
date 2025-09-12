@@ -52,8 +52,13 @@ resource "aws_lambda_function" "charlie_api" {
   runtime         = "python3.11"
   timeout         = 30
 
-  # AWS_REGION is automatically provided by Lambda runtime
-  # No custom environment variables needed
+  environment {
+    variables = {
+      LEX_BOT_ID        = data.dotenv.env.env["LEX_BOT_ID"]
+      LEX_BOT_ALIAS_ID  = data.dotenv.env.env["LEX_BOT_ALIAS_ID"]
+      LEX_BOT_LOCALE_ID = data.dotenv.env.env["LEX_BOT_LOCALE_ID"]
+    }
+  }
 
   depends_on = [
     aws_iam_role_policy_attachment.lambda_basic_execution,

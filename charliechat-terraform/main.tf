@@ -20,8 +20,3 @@ data "dotenv" "env" {
 provider "aws" {
   region = data.dotenv.env.env["AWS_REGION"]
 }
-
-
-
-
-

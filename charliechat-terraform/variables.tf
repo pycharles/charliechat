@@ -9,6 +9,3 @@ variable "bot_name" {
   type        = string
   default     = "charlie-virtual-resume"
 }
-
-
-
