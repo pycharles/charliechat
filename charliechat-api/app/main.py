@@ -11,6 +11,7 @@ from datetime import datetime
 
 from .config import get_settings
 from .lex_client import LexChatClient
+from .ai_middleware import normalize_person_name, query_bedrock
 
 
 app = FastAPI(title="Charlie Chat API", version="0.1.0")
@@ -94,6 +95,107 @@ def load_journal_entries():
     return entries
 
 
+def _get_session_attributes(resp: dict) -> dict:
+    """
+    Extract session attributes from Lex response for context.
+    
+    This allows Bedrock to access previous conversation context stored in Lex session state.
+    
+    Args:
+        resp: Lex response dictionary
+        
+    Returns:
+        Session attributes dictionary (empty dict if not available)
+    """
+    session_state = resp.get("sessionState", {})
+    if isinstance(session_state, dict):
+        session_attributes = session_state.get("sessionAttributes", {})
+        if isinstance(session_attributes, dict):
+            return session_attributes
+    return {}
+
+
+def _update_session_attributes(resp: dict, updated_attributes: dict) -> None:
+    """
+    Update session attributes in Lex response with new context.
+    
+    This persists the updated session attributes back to the response so they can be
+    stored in Lex session state for the next turn.
+    
+    Args:
+        resp: Lex response dictionary (modified in-place)
+        updated_attributes: New session attributes to store
+    """
+    # Get or create sessionState
+    session_state = resp.get("sessionState", {})
+    if not isinstance(session_state, dict):
+        session_state = {}
+    
+    # Update sessionAttributes with the new context
+    session_state["sessionAttributes"] = updated_attributes
+    resp["sessionState"] = session_state
+
+
+def _get_bedrock_response(resp: dict) -> str:
+    """
+    Extract slots from Lex response and get Bedrock AI response.
+    
+    This function is called when Lex doesn't provide a direct response,
+    allowing Bedrock AI to handle complex queries that require context.
+    
+    Args:
+        resp: Lex response dictionary
+        
+    Returns:
+        AI response string or fallback message
+    """
+    # Extract slots from Lex response with defensive defaults
+    interpretations = resp.get("interpretations", [])
+    person_slot = None
+    question_slot = None
+    
+    # Safely extract slots without raising KeyErrors
+    if interpretations and len(interpretations) > 0:
+        intent = interpretations[0].get("intent", {})
+        slots = intent.get("slots", {})
+        
+        # Extract person slot safely
+        person_data = slots.get("person", {})
+        if isinstance(person_data, dict):
+            person_value = person_data.get("value", {})
+            if isinstance(person_value, dict):
+                person_slot = person_value.get("originalValue")
+        
+        # Extract question slot safely
+        question_data = slots.get("question", {})
+        if isinstance(question_data, dict):
+            question_value = question_data.get("value", {})
+            if isinstance(question_value, dict):
+                question_slot = question_value.get("originalValue")
+    
+    # Normalize person name and get AI response
+    person = normalize_person_name(person_slot)
+    
+    if question_slot and question_slot.strip():
+        # Use Bedrock AI for response when we have a valid question
+        # Extract session attributes for context and get updated attributes
+        session_attributes = _get_session_attributes(resp)
+        ai_response, updated_attributes = query_bedrock(person, question_slot.strip(), session_attributes)
+        
+        # Save updated session attributes back to the response for persistence
+        # This enables multi-turn memory by storing last Q&A for follow-up context
+        _update_session_attributes(resp, updated_attributes)
+        
+        return ai_response
+    else:
+        # No question detected - clear stale memory to avoid confusing context carry-over
+        # This prevents irrelevant previous Q&A from affecting future conversations
+        _update_session_attributes(resp, {})
+        
+        # Fallback message if no question detected
+        return "I did not catch a question. Please ask me about experience, skills, or leadership style."
+
+
 @app.get("/blog", response_class=HTMLResponse)
 def blog(request: Request) -> HTMLResponse:
     journal_entries = load_journal_entries()
@@ -112,6 +214,14 @@ def favicon_redirect():
 async def chat(request: Request, session_id: str | None = Form(None), text: str | None = Form(None), session_state: str | None = Form(None)):
     """Single endpoint supports both JSON API and HTMX form posts.
 
+    Flow:
+    1. Call Lex to process user input and extract slots/intents
+    2. If Lex provides direct response (e.g., "test" intent), use it (saves costs)
+    3. If no Lex response, use Bedrock AI for complex queries
+    4. Save Bedrock responses to sessionAttributes for follow-up context
+    5. Persist session_state for context carry-over across turns
+    6. Clear stale memory when no question detected to avoid confusing context carry-over
+    
     - If HX-Request header is present (HTMX), returns HTML fragment with user and bot bubbles.
     - Otherwise, returns JSON matching ChatResponse.
     """
@@ -126,14 +236,73 @@ async def chat(request: Request, session_id: str | None = Form(None), text: str 
             effective_session_id = session_id or "default"
             effective_text = text or ""
 
+            # Call Lex to extract slots and check for intents
+            # Pass session_state to maintain context across turns
             resp = client.recognize_text(
                 session_id=effective_session_id,
                 text=effective_text,
-                session_state=None,
+                session_state=session_state,  # Pass existing session state for context
             )
+            
+            # Check if Lex has a direct response (intent fulfillment)
+            # This handles intents like "test" that have direct responses to save costs
             messages = resp.get("messages", [])
+            if messages:
+                # Extract bot text from Lex messages (for intents like "test")
+                bot_texts: list[str] = []
+                for msg in messages:
+                    if isinstance(msg, dict):
+                        # Lex V2 rich content list
+                        content_val = msg.get("content")
+                        if isinstance(content_val, list):
+                            for c in content_val:
+                                if isinstance(c, dict):
+                                    content_str = c.get("content") or c.get("text")
+                                    if content_str:
+                                        bot_texts.append(str(content_str))
+                        # Simple dict with text
+                        elif isinstance(content_val, (str, int, float)):
+                            bot_texts.append(str(content_val))
+                        elif "text" in msg and msg["text"]:
+                            bot_texts.append(str(msg["text"]))
+                    elif isinstance(msg, (str, int, float)):
+                        bot_texts.append(str(msg))
+                
+                raw_bot_text = "\n".join(bot_texts).strip()
+                if raw_bot_text:
+                    # Lex provided a direct response (intent fulfilled), use it
+                    # This saves costs by avoiding Bedrock calls for simple intents
+                    # raw_bot_text is already set correctly, no additional processing needed
+                    pass
+                else:
+                    # Lex messages exist but are empty, try Bedrock AI
+                    raw_bot_text = _get_bedrock_response(resp)
+            else:
+                # No Lex messages, try Bedrock AI
+                raw_bot_text = _get_bedrock_response(resp)
 
-            # Extract a simple bot text from messages (robust across common shapes)
+            # Escape to prevent HTML injection
+            user_safe = html_escape(effective_text)
+            bot_safe = html_escape(raw_bot_text)
+
+            # Return ONLY bot bubble to replace pending placeholder (targeted by hx-target)
+            html = f'<div class="message message-bot fade-in"><div class="bubble">{bot_safe}</div></div>'
+            return HTMLResponse(content=html)
+
+        # Handle JSON API
+        payload = await request.json()
+        req = ChatRequest(**payload)
+        resp = client.recognize_text(
+            session_id=req.session_id,
+            text=req.text,
+            session_state=req.session_state,  # Pass existing session state for context
+        )
+        
+        # Check if Lex has a direct response (intent fulfillment)
+        # This handles intents like "test" that have direct responses to save costs
+        messages = resp.get("messages", [])
+        if messages:
+            # Extract bot text from Lex messages (for intents like "test")
             bot_texts: list[str] = []
             for msg in messages:
                 if isinstance(msg, dict):
@@ -152,30 +321,33 @@ async def chat(request: Request, session_id: str | None = Form(None), text: str 
                         bot_texts.append(str(msg["text"]))
                 elif isinstance(msg, (str, int, float)):
                     bot_texts.append(str(msg))
-
+            
             raw_bot_text = "\n".join(bot_texts).strip()
-            if not raw_bot_text:
-                raw_bot_text = "..."  # Fallback so the UI shows something
-
-            # Escape to prevent HTML injection
-            user_safe = html_escape(effective_text)
-            bot_safe = html_escape(raw_bot_text)
-
-            # Return ONLY bot bubble to replace pending placeholder (targeted by hx-target)
-            html = f'<div class="message message-bot fade-in"><div class="bubble">{bot_safe}</div></div>'
-            return HTMLResponse(content=html)
-
-        # Handle JSON API
-        payload = await request.json()
-        req = ChatRequest(**payload)
-        resp = client.recognize_text(
-            session_id=req.session_id,
-            text=req.text,
-            session_state=req.session_state,
-        )
+            if raw_bot_text:
+                # Lex provided a direct response (intent fulfilled), use it
+                # This saves costs by avoiding Bedrock calls for simple intents
+                # Keep the original Lex message format - messages are already correct
+                pass
+            else:
+                # Lex messages exist but are empty, try Bedrock AI
+                ai_response = _get_bedrock_response(resp)
+                # Create a message with the AI response
+                ai_message = {
+                    "content": [{"text": ai_response}]
+                }
+                messages = [ai_message]
+        else:
+            # No Lex messages, try Bedrock AI
+            ai_response = _get_bedrock_response(resp)
+            # Create a message with the AI response
+            ai_message = {
+                "content": [{"text": ai_response}]
+            }
+            messages = [ai_message]
+        
         return ChatResponse(
-            messages=resp.get("messages", []),
-            session_state=resp.get("sessionState"),
+            messages=messages,
+            session_state=resp.get("sessionState"),  # Return updated session state for next turn
         )
     except Exception as exc:  # noqa: BLE001 - bubble exact message for now
         raise HTTPException(status_code=500, detail=str(exc))

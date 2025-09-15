@@ -55,9 +55,22 @@ resource "aws_lambda_function" "charlie_api" {
 
   environment {
     variables = {
+      # Lex Bot Configuration
       LEX_BOT_ID        = data.dotenv.env.env["LEX_BOT_ID"]
       LEX_BOT_ALIAS_ID  = data.dotenv.env.env["LEX_BOT_ALIAS_ID"]
       LEX_BOT_LOCALE_ID = data.dotenv.env.env["LEX_BOT_LOCALE_ID"]
+      
+      # Bedrock AI Configuration
+      # BEDROCK_MODEL_ID: Switch Claude model (haiku/sonnet/opus)
+      # BEDROCK_MAX_TOKENS: Control response length (100-4000)
+      # SYSTEM_PROMPT_TEMPLATE: Custom personality/tone override
+      # DEFAULT_PERSON: Default person name when Lex slot is missing
+      # DEBUG_LOGGING: Enable debug logging for development
+      BEDROCK_MODEL_ID     = data.dotenv.env.env["BEDROCK_MODEL_ID"]
+      BEDROCK_MAX_TOKENS   = data.dotenv.env.env["BEDROCK_MAX_TOKENS"]
+      SYSTEM_PROMPT_TEMPLATE = data.dotenv.env.env["SYSTEM_PROMPT_TEMPLATE"]
+      DEFAULT_PERSON       = data.dotenv.env.env["DEFAULT_PERSON"]
+      DEBUG_LOGGING        = data.dotenv.env.env["DEBUG_LOGGING"]
     }
   }
 
