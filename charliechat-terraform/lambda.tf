@@ -1,3 +1,7 @@
+# Data sources for current region and account
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
 # Lambda IAM Role
 resource "aws_iam_role" "lambda_execution_role" {
   name = "charlie-lambda-execution-role"
@@ -41,6 +45,15 @@ resource "aws_iam_role_policy" "lambda_lex_access" {
       }
     ]
   })
+}
+
+# Allow Lex to invoke the Lambda function
+resource "aws_lambda_permission" "allow_lex_invoke" {
+  statement_id  = "AllowExecutionFromLex"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.charlie_api.function_name
+  principal     = "lex.amazonaws.com"
+  source_arn    = "arn:aws:lex:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:bot-alias/*/*"
 }
 
 # Lambda function
