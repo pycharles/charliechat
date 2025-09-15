@@ -51,6 +51,7 @@ resource "aws_lambda_function" "charlie_api" {
   handler         = "lambda_handler.handler"
   runtime         = "python3.11"
   timeout         = 30
+  source_code_hash = filebase64sha256("../charliechat-api/lambda-deployment.zip")
 
   environment {
     variables = {

@@ -217,3 +217,5 @@ terraform.tfstate*
 lambda-deployment.zip
 lambda_package/
 
+# Ignore LLM training data
+training-data/
