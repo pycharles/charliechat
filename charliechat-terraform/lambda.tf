@@ -56,15 +56,15 @@ resource "aws_lambda_permission" "allow_lex_invoke" {
   source_arn    = "arn:aws:lex:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:bot-alias/*/*"
 }
 
-# Lambda function
+# API Lambda function (FastAPI + Mangum)
 resource "aws_lambda_function" "charlie_api" {
-  filename         = "../charliechat-api/lambda-deployment.zip"
+  filename         = "../charliechat-api/lambda_deployment.zip"
   function_name    = "charlie-chat-api"
   role            = aws_iam_role.lambda_execution_role.arn
-  handler         = "lambda_handler.handler"
+  handler         = "lambda_api.handler"
   runtime         = "python3.11"
   timeout         = 30
-  source_code_hash = filebase64sha256("../charliechat-api/lambda-deployment.zip")
+  source_code_hash = filebase64sha256("../charliechat-api/lambda_deployment.zip")
 
   environment {
     variables = {
@@ -92,6 +92,7 @@ resource "aws_lambda_function" "charlie_api" {
     aws_iam_role_policy.lambda_lex_access,
   ]
 }
+
 
 # Temporary Lambda function URL (alternative to API Gateway for testing)
 # TODO: Remove this once API Gateway is working

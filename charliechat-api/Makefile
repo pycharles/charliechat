@@ -1,4 +1,4 @@
 scss:
-	sass --watch app/static/scss:app/static/css
+	sass --watch app/web/static/scss:app/web/static/css
 
 
