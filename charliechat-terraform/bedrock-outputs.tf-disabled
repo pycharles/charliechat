@@ -1,0 +1,65 @@
+#NOTE: This configuration is disabled because S3 as a vector store is not supported by the AWS provider
+#TODO: Enable this configuration once S3 as a vector store is supported by the AWS provider
+
+output "knowledge_base_id" {
+  description = "Bedrock Knowledge Base ID"
+  value       = aws_bedrockagent_knowledge_base.charlie_chat.id
+}
+
+output "knowledge_base_arn" {
+  description = "Bedrock Knowledge Base ARN"
+  value       = aws_bedrockagent_knowledge_base.charlie_chat.arn
+}
+
+output "data_source_id" {
+  description = "Bedrock Data Source ID"
+  value       = aws_bedrockagent_data_source.charlie_chat.id
+}
+
+output "s3_bucket_name" {
+  description = "S3 bucket name for knowledge base data source"
+  value       = aws_s3_bucket.bedrock_knowledge_base.bucket
+}
+
+output "s3_bucket_arn" {
+  description = "S3 bucket ARN for knowledge base data source"
+  value       = aws_s3_bucket.bedrock_knowledge_base.arn
+}
+
+
+output "bedrock_execution_role_arn" {
+  description = "Bedrock Knowledge Base execution role ARN"
+  value       = aws_iam_role.bedrock_knowledge_base_execution.arn
+}
+
+output "knowledge_base_instructions" {
+  value = <<-EOT
+    Bedrock Knowledge Base Setup:
+    
+    1. Knowledge Base: ${aws_bedrockagent_knowledge_base.charlie_chat.name}
+    2. Data Source: ${aws_bedrockagent_data_source.charlie_chat.name}
+    3. S3 Bucket: ${aws_s3_bucket.bedrock_knowledge_base.bucket}
+    4. Vector Store: S3 (when Terraform supports it)
+    5. Embedding Model: Amazon Titan Text Embeddings v2
+    
+    To add documents:
+    1. Upload documents to S3 bucket: ${aws_s3_bucket.bedrock_knowledge_base.bucket}
+    2. Start ingestion job in the AWS Console
+    3. Documents will be automatically chunked and embedded using Titan v2
+    
+    Default chunking configuration:
+    - Strategy: Fixed size
+    - Max tokens: 300
+    - Overlap: 20%
+    
+    Current setup:
+    - Uses latest Titan v2 embeddings for better accuracy
+    - S3 for document data source
+    - Proper security policies and IAM roles
+    
+    Note: S3 as vector store is supported by AWS but not yet in Terraform AWS provider.
+    This configuration will fail until Terraform adds S3 vector store support.
+    Alternative: Use AWS Console to create the knowledge base with S3 vector store.
+  EOT
+  description = "Instructions for using the Bedrock Knowledge Base"
+}

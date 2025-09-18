@@ -1,0 +1,22 @@
+{
+  "python.defaultInterpreterPath": "./charliechat-api/.venv/bin/python",
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terraform.path": "/usr/local/bin/terraform",
+  "terraform.workingDirectory": "./charliechat-terraform",
+  "terraform.format.enable": true,
+  "terraform.validate.enable": true,
+  "terraform.languageServer.path": "/usr/local/bin/terraform-ls",
+  "terraform.languageServer": {
+    "external": true,
+    "path": "/usr/local/bin/terraform-ls",
+    "args": ["serve"]
+  }
+}
+
+
+
+
+
+
+
+
