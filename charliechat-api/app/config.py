@@ -11,10 +11,8 @@ load_dotenv()
 
 class Settings(BaseModel):
     aws_region: str = os.getenv("AWS_REGION", "us-east-1")
-    lex_bot_id: str = os.getenv("LEX_BOT_ID", "")
-    lex_bot_alias_id: str = os.getenv("LEX_BOT_ALIAS_ID", "")
-    lex_bot_locale_id: str = os.getenv("LEX_BOT_LOCALE_ID", "en_US")
     bedrock_kb_id: Optional[str] = os.getenv("BEDROCK_KB_ID")
+    default_person: str = os.getenv("DEFAULT_PERSON", "Charles")
 
     aws_access_key_id: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")

@@ -9,10 +9,11 @@ output "api_lambda_function_arn" {
   value       = aws_lambda_function.charlie_api.arn
 }
 
-output "api_lambda_function_url" {
-  description = "API Lambda function URL (direct access)"
-  value       = try(aws_lambda_function_url.charlie_api_url.function_url, null)
-}
+# Lambda function URL output (commented out - using API Gateway instead)
+# output "api_lambda_function_url" {
+#   description = "API Lambda function URL (direct access)"
+#   value       = try(aws_lambda_function_url.charlie_api_url.function_url, null)
+# }
 
 # Legacy outputs for backward compatibility
 output "lambda_function_name" {
@@ -25,7 +26,8 @@ output "lambda_function_arn" {
   value       = aws_lambda_function.charlie_api.arn
 }
 
-output "lambda_function_url" {
-  description = "API Lambda function URL (legacy)"
-  value       = try(aws_lambda_function_url.charlie_api_url.function_url, null)
-}
+# Lambda function URL output (commented out - using API Gateway instead)
+# output "lambda_function_url" {
+#   description = "API Lambda function URL (legacy)"
+#   value       = try(aws_lambda_function_url.charlie_api_url.function_url, null)
+# }

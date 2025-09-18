@@ -14,13 +14,17 @@ from collections import defaultdict
 import json
 
 from .web.routes import router as web_router
+from .middleware.timing import TimingMiddleware
 
 # Create FastAPI app
 app = FastAPI(
     title="Charlie Chat API",
     version="0.1.0",
-    description="AI-powered chat application with Lex V2 and Bedrock integration"
+    description="AI-powered chat application with direct intent recognition and Bedrock integration"
 )
+
+# Add timing middleware
+app.add_middleware(TimingMiddleware)
 
 # Middleware to redirect www.charlesob.com to charlesob.com for SEO normalization
 @app.middleware("http")

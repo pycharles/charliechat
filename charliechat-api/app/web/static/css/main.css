@@ -253,6 +253,11 @@ footer {
   border-bottom-left-radius: 12px;
   transition: all 0.2s ease;
 }
+.message-bot.error .message-bot .bubble {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
 .message-bot .bubble strong, .message-bot .bubble b {
   font-weight: 600;
   color: rgb(12.6162790698, 16.6860465116, 22.3837209302);
@@ -445,15 +450,16 @@ footer {
 .voice-style-btn {
   background: transparent !important;
   border: none !important;
-  border-radius: 6px;
-  padding: 8px;
+  border-radius: 4px;
+  padding: 6px;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transform: translateX(-100%);
+  transform: translateX(100%);
+  position: relative;
 }
 .voice-style-btn:last-child {
   transform: translateX(0);
@@ -477,10 +483,50 @@ footer {
   opacity: 1;
   transform: translateX(0) translateY(-1px);
 }
+.voice-style-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 9999;
+}
+.voice-style-btn::before {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  margin-top: 2px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 4px solid rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 9999;
+}
+.voice-style-btn:hover::after, .voice-style-btn:hover::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 
 .voice-icon {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   filter: brightness(0) saturate(100%) invert(39%) sepia(8%) saturate(1000%) hue-rotate(201deg) brightness(95%) contrast(86%);
   transition: filter 0.2s ease;
 }

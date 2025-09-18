@@ -6,11 +6,11 @@ the core functionality of the application.
 """
 
 from .chat_service import ChatService
-from .lex_service import LexService
 from .ai_service import AIService
+from .prompt_engineering import prompt_engineer
 
 __all__ = [
     "ChatService",
-    "LexService", 
-    "AIService"
+    "AIService",
+    "prompt_engineer"
 ]

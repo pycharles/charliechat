@@ -49,23 +49,41 @@ install_dependencies() {
 
 # Function to create zip file for the lambda
 create_lambda_zip() {
-    print_status "Creating lambda_deployment.zip for charlie-chat-api..."
+    print_status "Creating lambda-deployment.zip for charlie-chat-api..."
     
     # Remove existing zip if it exists
-    rm -f "lambda_deployment.zip"
+    rm -f "lambda-deployment.zip"
     
-    # Create zip excluding unnecessary files
-    cd "lambda_api"
-    zip -r "../lambda_deployment.zip" . \
+    # Create zip with proper Python package structure
+    # Copy dependencies to a temporary directory with correct structure
+    mkdir -p temp_lambda_package
+    cp -r lambda_api/ temp_lambda_package/
+    cp -r app/ temp_lambda_package/
+    
+    # Copy Python packages to the root level for proper import
+    cp -r .venv/lib/python3.11/site-packages/* temp_lambda_package/
+    
+    # Create zip from the properly structured directory
+    cd temp_lambda_package
+    zip -r "../lambda-deployment.zip" . \
         -x "*.pyc" \
         -x "__pycache__/*" \
         -x "*.env" \
         -x "*.log" \
         -x ".DS_Store" \
-        -x "*.git*"
+        -x "*.git*" \
+        -x "app/__pycache__/*" \
+        -x "app/*/__pycache__/*" \
+        -x "app/*/*/__pycache__/*" \
+        -x "*/__pycache__/*" \
+        -x "*/*/__pycache__/*" \
+        -x "*/*/*/__pycache__/*"
     cd ..
     
-    print_status "Created lambda_deployment.zip"
+    # Clean up temporary directory
+    rm -rf temp_lambda_package
+    
+    print_status "Created lambda-deployment.zip"
 }
 
 # Function to deploy the lambda function
@@ -74,7 +92,7 @@ deploy_lambda() {
     
     aws lambda update-function-code \
         --function-name "charlie-chat-api" \
-        --zip-file "fileb://lambda_deployment.zip"
+        --zip-file "fileb://lambda-deployment.zip"
     
     print_status "Successfully deployed charlie-chat-api"
 }

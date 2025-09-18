@@ -1,15 +1,17 @@
 """
 Chat Service
 
-This service orchestrates the chat flow by coordinating between
-Lex service, AI service, and session management.
+This service orchestrates the chat flow by handling intent recognition
+and coordinating with AI service for response generation.
 """
 
 from typing import Dict, Any, Optional, Tuple
+import traceback
+import re
 from ..config import Settings
-from ..models.lex import LexResponse
-from .lex_service import LexService
 from .ai_service import AIService
+from ..utils.debug_logger import debug_logger
+from .prompt_engineering import prompt_engineer
 
 
 class ChatService:
@@ -17,142 +19,174 @@ class ChatService:
     
     def __init__(self, settings: Settings):
         """Initialize the chat service with dependencies"""
-        self.lex_service = LexService(settings)
         self.ai_service = AIService()
+        self.settings = settings
 
-    def process_chat(self, session_id: str, text: str, session_state: Optional[Dict[str, Any]] = None, voice_style: str = "normal") -> Tuple[str, Dict[str, Any]]:
+    async def process_chat(self, request_id: str, session_id: str, text: str, session_state: Optional[Dict[str, Any]] = None, voice_style: str = "normal", request: Optional[Any] = None) -> Tuple[str, Dict[str, Any]]:
         """
-        Process a chat interaction end-to-end
+        Process a chat interaction end-to-end with direct intent recognition
         
         Args:
+            request_id: Unique request identifier for tracing
             session_id: Unique session identifier
             text: User input text
             session_state: Optional session state for context
+            voice_style: Voice style for response tone
+            request: Optional FastAPI request object for timing
             
         Returns:
             Tuple of (response_text, updated_session_state)
         """
-        # Step 1: Call Lex to process user input and extract slots
-        lex_response = self.lex_service.recognize_text(session_id, text, session_state)
+        debug_logger.log_chat(
+            request_id,
+            f"Processing chat for session {session_id}: '{text[:50]}{'...' if len(text) > 50 else ''}'",
+            request
+        )
+        # Stack trace logging removed to reduce log noise
         
-        # Step 2: Check if Lex provided a direct response (cost savings)
-        # Only use Lex direct responses for specific intents, not fallback responses
-        if self.lex_service.has_direct_response(lex_response):
-            # Check if this is a fallback response (indicates Lex couldn't understand)
-            interpretations = lex_response.interpretations or []
-            is_fallback = False
-            if interpretations:
-                # Get the first interpretation (highest confidence)
-                top_interpretation = interpretations[0]
-                top_intent_name = top_interpretation.get("intent", {}).get("name")
-                is_fallback = top_intent_name == "FallbackIntent"
-            
-            if not is_fallback:
-                direct_response = self.lex_service.get_direct_response_text(lex_response)
-                if direct_response.strip():
-                    # Check if this is an error response from Lex
-                    error_indicators = [
-                        "something went wrong while answering that",
-                        "try again in a moment",
-                        "error",
-                        "failed",
-                        "hmm, something went wrong"
-                    ]
-                    is_error_response = any(
-                        indicator in direct_response.lower() 
-                        for indicator in error_indicators
-                    )
-                    
-                    if not is_error_response:
-                        # Use Lex direct response for other intents
-                        return direct_response, lex_response.session_state or {}
-                    else:
-                        # Lex returned error, fall back to AI
-                        pass
+        # Step 1: Extract person and question using simple pattern matching
+        person, question = self._extract_intent_slots(text)
         
-        # Step 3: Extract slots for AI processing
-        person_slot, question_slot = self.lex_service.extract_slots(lex_response)
+        # Step 2: Normalize person name
+        person = self.ai_service.normalize_person_name(person)
         
-        # Step 4: Normalize person name
-        person = self.ai_service.normalize_person_name(person_slot)
-        
-        # Step 5: Get session attributes for context
-        session_attributes = self._get_session_attributes(lex_response)
-        
-        # Store the current voice_style in session attributes for persistence
-        if session_attributes is None:
-            session_attributes = {}
+        # Step 3: Get session attributes for context
+        session_attributes = session_state or {}
         session_attributes['current_voice_style'] = voice_style
         
-        # Step 6: Process with AI if we have a valid question
-        if question_slot and question_slot.strip():
-            # Use the extracted question from Lex
-            question = question_slot.strip()
+        # Step 4: Process with AI if we have a valid question
+        if question and question.strip():
+            # Use the extracted question
+            question_text = question.strip()
         elif text and text.strip():
             # Fallback: use the raw user input as the question
-            question = text.strip()
+            question_text = text.strip()
         else:
-            # No question available - clear stale memory and return fallback
-            updated_session_state = self._update_session_state(lex_response, {})
-            return "I did not catch a question. Please ask me about experience, skills, or leadership style.", updated_session_state
+            # No question available - return fallback
+            debug_logger.log_chat(
+                request_id,
+                "No valid question found, returning fallback response",
+                request
+            )
+            return "I did not catch a question. Please ask me about experience, skills, or leadership style.", session_attributes
         
-        # Process with AI
-        ai_response, updated_attributes = self.ai_service.query_bedrock(
-            person=person,
-            question=question,
-            session_attributes=session_attributes,
-            voice_style=voice_style
+        debug_logger.log_chat(
+            request_id,
+            f"Extracted person: '{person}', question: '{question_text}'",
+            request
         )
         
-        # Update session state with AI response
-        updated_session_state = self._update_session_state(lex_response, updated_attributes)
+        # Step 5: Process with AI using prompt engineering
+        debug_logger.log_chat(
+            request_id,
+            "Calling AI service for response generation",
+            request
+        )
+        
+        # Debug logging for session attributes
+        debug_logger.log_chat(
+            request_id,
+            f"Session attributes being passed to AI: {session_attributes}",
+            request
+        )
+        if session_attributes and "conversation_history" in session_attributes:
+            debug_logger.log_chat(
+                request_id,
+                f"Conversation history length: {len(session_attributes['conversation_history'])}",
+                request
+            )
+        
+        # Get KB query parameters using prompt engineering
+        kb_query_params = prompt_engineer.get_kb_query_params(question_text)
+        number_of_results = kb_query_params['numberOfResults']
+        
+        # Retrieve KB context with dynamic parameters
+        kb_context = self.ai_service._retrieve_kb_context(question_text, number_of_results)
+        
+        # Select and potentially summarize KB context
+        if kb_context and kb_context != "No additional KB context available.":
+            # Parse KB passages for selection
+            passages = kb_context.split('\n\n')
+            selected_passages, _ = prompt_engineer.select_kb_context(question_text, passages)
+            if selected_passages:
+                kb_context = prompt_engineer.summarize_kb_context(selected_passages)
+        
+        # Calculate response length using prompt engineering
+        response_length = prompt_engineer.calculate_response_length(question_text, self.ai_service.max_tokens)
+        
+        ai_response, updated_attributes = self.ai_service.query_bedrock(
+            person=person,
+            question=question_text,
+            session_attributes=session_attributes,
+            voice_style=voice_style,
+            request_id=request_id,
+            request=request,
+            kb_context=kb_context,
+            response_length=response_length
+        )
+        debug_logger.log_chat(
+            request_id,
+            "AI service completed successfully",
+            request
+        )
+        
+        # Step 6: Update session state with AI response
+        updated_session_state = {**session_attributes, **updated_attributes}
+        debug_logger.log_chat(
+            request_id,
+            f"Chat processing completed for session {session_id}",
+            request
+        )
         return ai_response, updated_session_state
 
-    def _get_session_attributes(self, lex_response: LexResponse) -> Dict[str, Any]:
+    def _extract_intent_slots(self, text: str) -> Tuple[Optional[str], Optional[str]]:
         """
-        Extract session attributes from Lex response
+        Extract person and question slots using simple pattern matching
         
         Args:
-            lex_response: Response from Lex recognition
+            text: User input text
             
         Returns:
-            Session attributes dictionary
+            Tuple of (person_slot, question_slot)
         """
-        if not lex_response.session_state:
-            return {}
+        if not text or not text.strip():
+            return None, None
         
-        # Handle raw dict data from Lex
-        if isinstance(lex_response.session_state, dict):
-            return lex_response.session_state.get("sessionAttributes", {})
+        text_lower = text.lower().strip()
+        person = None
+        question = None
         
-        # Handle Pydantic model (if it exists)
-        return getattr(lex_response.session_state, "session_attributes", {}) or {}
-
-    def _update_session_state(self, lex_response: LexResponse, updated_attributes: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update session state with new attributes
+        # Common person name patterns
+        person_patterns = [
+            r'\b(?:about|tell me about|what about)\s+(charles|charlie|chaz|charles o\'?brien|charles obrien)\b',
+            r'\b(charles|charlie|chaz|charles o\'?brien|charles obrien)\'?s\s+(?:experience|skills|background|work|career)\b',
+            r'^(charles|charlie|chaz|charles o\'?brien|charles obrien)\b',
+        ]
         
-        Args:
-            lex_response: Original Lex response
-            updated_attributes: New attributes to add
-            
-        Returns:
-            Updated session state
-        """
-        if not lex_response.session_state:
-            return {"sessionAttributes": updated_attributes}
+        # Extract person name
+        for pattern in person_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                person = match.group(1)
+                break
         
-        # Handle raw dict data from Lex
-        if isinstance(lex_response.session_state, dict):
-            session_state = lex_response.session_state.copy()
-        else:
-            # Handle Pydantic model (if it exists)
-            session_state = lex_response.session_state.dict() if hasattr(lex_response.session_state, 'dict') else {}
+        # If no specific person mentioned, use default
+        if not person:
+            person = self.settings.default_person if hasattr(self.settings, 'default_person') else 'Charles'
         
-        # Update session attributes
-        if "sessionAttributes" not in session_state:
-            session_state["sessionAttributes"] = {}
+        # Extract question - remove person references to get clean question
+        question = text.strip()
         
-        session_state["sessionAttributes"].update(updated_attributes)
+        # Remove person name references from question
+        person_cleanup_patterns = [
+            r'\b(?:about|tell me about)\s+(?:charles|charlie|chaz|charles o\'?brien|charles obrien)\b',
+            r'\b(?:charles|charlie|chaz|charles o\'?brien|charles obrien)\'?s\s+',
+            r'^(?:charles|charlie|chaz|charles o\'?brien|charles obrien)\b\s*',
+        ]
         
-        return session_state
+        for pattern in person_cleanup_patterns:
+            question = re.sub(pattern, '', question, flags=re.IGNORECASE)
+        
+        question = question.strip()
+        
+        return person, question if question else None

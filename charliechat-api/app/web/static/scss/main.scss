@@ -263,6 +263,13 @@ footer {
   border-bottom-left-radius: 12px;
   transition: all 0.2s ease;
   
+  // Error styling
+  .message-bot.error & {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+  }
+  
         // Formatting for Markdown content
         strong, b {
           font-weight: 600;
@@ -478,15 +485,16 @@ footer {
 .voice-style-btn {
   background: transparent !important;
   border: none !important;
-  border-radius: 6px;
-  padding: 8px;
+  border-radius: 4px; // Reduced from 6px
+  padding: 6px; // Reduced from 8px (25% reduction)
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transform: translateX(-100%);
+  transform: translateX(100%); // Start from right instead of left
+  position: relative; // For custom tooltip
   
   // Last button (normal) is always visible
   &:last-child {
@@ -494,7 +502,7 @@ footer {
     opacity: 1;
   }
   
-  // Show all buttons on hover
+  // Show all buttons on hover - animate from right to left
   .voice-style-selector:hover & {
     transform: translateX(0);
     opacity: 0.8;
@@ -517,11 +525,58 @@ footer {
     opacity: 1;
     transform: translateX(0) translateY(-1px);
   }
+  
+  // Custom tooltip that appears below the button
+  &::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%; // Position below button
+    left: 50%; // Center horizontally
+    transform: translateX(-50%) translateY(-10px); // Start below and slightly up
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: all 0.2s ease;
+    pointer-events: none;
+    z-index: 9999; // Much higher z-index to appear above everything
+  }
+  
+  // Tooltip arrow pointing up to button
+  &::before {
+    content: '';
+    position: absolute;
+    top: 100%; // Position below button
+    left: 50%; // Center horizontally
+    transform: translateX(-50%) translateY(-10px); // Start below and slightly up
+    margin-top: 2px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid rgba(0, 0, 0, 0.9); // Arrow pointing up
+    opacity: 0;
+    transition: all 0.2s ease;
+    pointer-events: none;
+    z-index: 9999; // Much higher z-index to appear above everything
+  }
+  
+  // Show tooltip on hover
+  &:hover::after,
+  &:hover::before {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0); // End at normal position below
+  }
 }
 
 .voice-icon {
-  width: 18px;
-  height: 18px;
+  width: 14px; // Reduced from 18px (25% reduction)
+  height: 14px; // Reduced from 18px (25% reduction)
   filter: brightness(0) saturate(100%) invert(39%) sepia(8%) saturate(1000%) hue-rotate(201deg) brightness(95%) contrast(86%);
   transition: filter 0.2s ease;
 }

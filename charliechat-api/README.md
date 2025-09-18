@@ -1,6 +1,6 @@
 # Charlie Chat API
 
-FastAPI application that provides the core chat functionality, combining AWS Lex V2 for natural language understanding with Bedrock AI for intelligent responses.
+FastAPI application that provides the core chat functionality with direct intent recognition and Bedrock AI for intelligent responses.
 
 > **Note**: This is the API component of Charlie Chat. For the complete project overview, see the [root README](../README.md).
 
@@ -45,9 +45,6 @@ FastAPI application that provides the core chat functionality, combining AWS Lex
 The application uses environment variables for configuration. See the [root .env-template](../.env-template) for all available options.
 
 ### Required Variables
-- `LEX_BOT_ID` - Your Lex V2 bot ID
-- `LEX_BOT_ALIAS_ID` - Your Lex bot alias ID  
-- `LEX_BOT_LOCALE_ID` - Bot locale (e.g., "en_US")
 - `AWS_ACCESS_KEY_ID` - AWS access key
 - `AWS_SECRET_ACCESS_KEY` - AWS secret key
 - `AWS_REGION` - AWS region (e.g., "us-east-1")
@@ -111,18 +108,17 @@ app/
 │   ├── templates/         # HTML templates
 │   └── static/           # CSS, JavaScript, images
 ├── services/              # Business logic
-│   ├── chat_service.py   # Chat orchestration
-│   ├── lex_service.py    # Lex V2 integration
+│   ├── chat_service.py   # Chat orchestration with intent recognition
 │   └── ai_service.py     # Bedrock AI integration
 ├── models/                # Data models
-│   ├── chat.py           # Chat request/response models
-│   └── lex.py            # Lex V2 event models
+│   └── chat.py           # Chat request/response models
 ├── config.py             # Configuration management
 └── main.py               # Application entry point
 ```
 
 ### Key Features
 - **Layered Architecture**: Clean separation of concerns
+- **Direct Intent Recognition**: Simple pattern matching for person and question extraction
 - **Session Memory**: Maintains conversation context across turns
 - **Knowledge Base Integration**: Enhanced responses with KB context
 - **Voice Styles**: Multiple personality options (Normal, Surfer, Pirate, Ninja)

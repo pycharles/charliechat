@@ -54,10 +54,11 @@ resource "aws_apigatewayv2_api" "charlie_api" {
 
 # Lambda integration
 resource "aws_apigatewayv2_integration" "charlie_lambda" {
-  api_id           = aws_apigatewayv2_api.charlie_api.id
-  integration_type = "AWS_PROXY"
-  integration_uri  = aws_lambda_function.charlie_api.invoke_arn
-  integration_method = "POST"
+  api_id                   = aws_apigatewayv2_api.charlie_api.id
+  integration_type         = "AWS_PROXY"
+  integration_uri          = aws_lambda_function.charlie_api.invoke_arn
+  integration_method       = "POST"
+  payload_format_version   = "2.0"
 }
 
 # Default route (catches all requests)

@@ -9,12 +9,15 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 import os
+import uuid
+import traceback
 from datetime import datetime
 import markdown
 
 from ..services import ChatService
 from ..config import get_settings
 from ..models.chat import ChatRequest, ChatResponse
+from ..utils.debug_logger import debug_logger
 
 # Initialize router
 router = APIRouter()
@@ -106,7 +109,21 @@ async def chat(
     - If HX-Request header is present (HTMX), returns HTML fragment
     - Otherwise, returns JSON response
     """
+    # Use request ID from middleware or generate one
+    request_id = getattr(request.state, 'request_id', str(uuid.uuid4())[:8])
+    
+    debug_logger.log_route(
+        request_id,
+        f"Received chat request - Session: {session_id}, Text: '{text[:50] if text else 'None'}{'...' if text and len(text) > 50 else ''}', Voice: {voice_style}",
+        request
+    )
+    
     if not session_id or not text:
+        debug_logger.log_route(
+            request_id,
+            f"Missing required parameters - session_id: {session_id}, text: {text}",
+            request
+        )
         raise HTTPException(status_code=400, detail="session_id and text are required")
     
     # Parse session state if provided
@@ -115,30 +132,141 @@ async def chat(
         try:
             import json
             parsed_session_state = json.loads(session_state)
-        except json.JSONDecodeError:
+            debug_logger.log_route(
+                request_id,
+                f"Received session state: {str(parsed_session_state)[:200]}{'...' if len(str(parsed_session_state)) > 200 else ''}",
+                request
+            )
+        except json.JSONDecodeError as e:
+            debug_logger.log_route(
+                request_id,
+                f"Failed to parse session state JSON: {e}. Raw: {session_state[:100]}...",
+                request
+            )
             parsed_session_state = None
+    else:
+        debug_logger.log_route(
+            request_id,
+            "No session state provided - starting new conversation",
+            request
+        )
     
     # Process chat through service layer
-    response_text, updated_session_state = chat_service.process_chat(
+    debug_logger.log_route(
+        request_id,
+        f"Calling chat_service.process_chat for session {session_id}",
+        request
+    )
+    response_text, updated_session_state = await chat_service.process_chat(
+        request_id=request_id,
         session_id=session_id,
         text=text,
         session_state=parsed_session_state,
-        voice_style=voice_style
+        voice_style=voice_style,
+        request=request
+    )
+    debug_logger.log_route(
+        request_id,
+        f"Chat service completed for session {session_id}",
+        request
     )
     
     # Check if this is an HTMX request
     if request.headers.get("HX-Request"):
+        debug_logger.log_route(
+            request_id,
+            "Processing HTMX response",
+            request
+        )
+        
+        # Debug: Log the actual response text being sent to frontend
+        debug_logger.log_route(
+            request_id,
+            f"=== SENDING TO BROWSER ===",
+            request
+        )
+        debug_logger.log_route(
+            request_id,
+            f"Browser response length: {len(response_text)} characters",
+            request
+        )
+        debug_logger.log_route(
+            request_id,
+            f"Browser response content: {response_text}",
+            request
+        )
+        
+        # Verify response matches what was stored in last_answer
+        if updated_session_state and "last_answer" in updated_session_state:
+            last_answer = updated_session_state["last_answer"]
+            if response_text == last_answer:
+                debug_logger.log_route(
+                    request_id,
+                    f"✅ VERIFICATION: Browser response matches last_answer exactly",
+                    request
+                )
+            else:
+                debug_logger.log_route(
+                    request_id,
+                    f"❌ VERIFICATION FAILED: Browser response differs from last_answer",
+                    request
+                )
+                debug_logger.log_route(
+                    request_id,
+                    f"last_answer length: {len(last_answer)}, Browser length: {len(response_text)}",
+                    request
+                )
+        else:
+            debug_logger.log_route(
+                request_id,
+                f"⚠️ No last_answer found in session state for verification",
+                request
+            )
+            
+        debug_logger.log_route(
+            request_id,
+            f"=== END BROWSER RESPONSE ===",
+            request
+        )
+        
         # Process Markdown in bot responses for formatting
         import markdown
         html_content = markdown.markdown(response_text, extensions=['nl2br'])
         
+        # Debug: Log the HTML content after markdown processing
+        debug_logger.log_route(
+            request_id,
+            f"HTML content after markdown: {html_content[:200]}{'...' if len(html_content) > 200 else ''}",
+            request
+        )
+        
         # Return only bot message for HTMX (user message is added by JavaScript)
+        # Include session state as a data attribute for JavaScript to read
+        import json
+        session_state_json = json.dumps(updated_session_state) if updated_session_state else "{}"
+        
+        # Log session state for debugging
+        debug_logger.log_route(
+            request_id,
+            f"Returning session state: {session_state_json[:200]}{'...' if len(session_state_json) > 200 else ''}",
+            request
+        )
+        
+        # Properly escape the JSON for HTML attribute
+        import html
+        escaped_session_state = html.escape(session_state_json, quote=True)
+        
         return HTMLResponse(f"""
-        <div class="message message-bot">
+        <div class="message message-bot" data-session-state="{escaped_session_state}">
             <div class="bubble">{html_content}</div>
         </div>
         """)
     else:
+        debug_logger.log_route(
+            request_id,
+            "Processing JSON response",
+            request
+        )
         # Return JSON response for API
         return ChatResponse(
             messages=[{"contentType": "PlainText", "content": response_text}],

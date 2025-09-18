@@ -1,6 +1,6 @@
 # Charlie Chat
 
-An AI-powered chatbot that combines AWS Lex V2 for natural language understanding with Bedrock AI for intelligent responses. Built with FastAPI and deployed using Terraform, it can answer questions about professional background, conduct interviews, or act as a personal AI assistant.
+An AI-powered chatbot with direct intent recognition and Bedrock AI for intelligent responses. Built with FastAPI and deployed using Terraform, it can answer questions about professional background, conduct interviews, or act as a personal AI assistant.
 
 ## 🚀 Quick Start
 
@@ -57,14 +57,14 @@ charliechat/
 
 - **Backend**: FastAPI (Python 3.11+)
 - **AI**: AWS Bedrock (Claude 3)
-- **NLP**: AWS Lex V2
+- **Intent Recognition**: Direct pattern matching
 - **Infrastructure**: Terraform
 - **Deployment**: AWS Lambda + API Gateway
 - **Frontend**: HTMX + SCSS
 
 ## ✨ Features
 
-- **Natural Language Understanding** via AWS Lex V2
+- **Direct Intent Recognition** with pattern matching
 - **Intelligent Responses** powered by AWS Bedrock AI
 - **Web Interface** with modern, responsive design
 - **Session Management** for conversational context
