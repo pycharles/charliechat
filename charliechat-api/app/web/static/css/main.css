@@ -414,14 +414,40 @@ footer {
   flex-direction: column;
 }
 
-.chat-voice-selector {
+.voice-style-container {
   position: absolute;
   top: 16px;
   right: 16px;
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 10;
+}
+
+.voice-discovery-label {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.6s ease;
+  pointer-events: none;
+  z-index: 1000;
+}
+.voice-discovery-label.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.chat-voice-selector {
+  display: flex;
   gap: 6px;
   align-items: center;
-  z-index: 10;
   opacity: 0.3;
   transform: translateX(0);
   transition: all 0.3s ease;
@@ -487,8 +513,8 @@ footer {
   content: attr(data-tooltip);
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(-10px);
+  right: 0;
+  transform: translateY(-10px);
   margin-top: 8px;
   padding: 6px 10px;
   background: rgba(0, 0, 0, 0.9);
@@ -506,8 +532,8 @@ footer {
   content: "";
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(-10px);
+  right: 12px;
+  transform: translateY(-10px);
   margin-top: 2px;
   width: 0;
   height: 0;
@@ -521,7 +547,7 @@ footer {
 }
 .voice-style-btn:hover::after, .voice-style-btn:hover::before {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 
 .voice-icon {
@@ -1431,21 +1457,30 @@ footer a:hover {
   font-weight: 500;
   color: #1f2937;
 }
+.feedback-form-group label .required {
+  color: #dc2626;
+  margin-left: 4px;
+}
 
-.feedback-form-group textarea {
+.feedback-form-group textarea,
+.feedback-form-group input[type=text] {
   width: 100%;
   padding: 12px 16px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   font-size: 14px;
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  resize: vertical;
-  min-height: 100px;
 }
-.feedback-form-group textarea:focus {
+.feedback-form-group textarea:focus,
+.feedback-form-group input[type=text]:focus {
   outline: none;
   border-color: #4f46e5;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.feedback-form-group textarea {
+  resize: vertical;
+  min-height: 100px;
 }
 
 .feedback-char-count {

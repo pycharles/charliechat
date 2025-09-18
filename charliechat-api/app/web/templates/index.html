@@ -58,19 +58,26 @@
           </div>
           
           <!-- Voice Style Selector - Top Right of Chat -->
-          <div class="chat-voice-selector">
-            <button class="voice-style-btn" data-style="ninja" data-tooltip="Change voice style to ninja" aria-label="Change voice style to ninja">
-              <img src="/static/ninja-star.svg" class="voice-icon" width="14" height="14" alt="Ninja">
-            </button>
-            <button class="voice-style-btn" data-style="pirate" data-tooltip="Change voice style to pirate" aria-label="Change voice style to pirate">
-              <img src="/static/pirate01.svg" class="voice-icon" width="14" height="14" alt="Pirate">
-            </button>
-            <button class="voice-style-btn" data-style="surfer" data-tooltip="Change voice style to surfer dude" aria-label="Change voice style to surfer dude">
-              <img src="/static/wave01.svg" class="voice-icon" width="14" height="14" alt="Surfer">
-            </button>
-            <button class="voice-style-btn active" data-style="normal" data-tooltip="Change voice style back to normal" aria-label="Change voice style back to normal">
-              <img src="/static/person.svg" class="voice-icon" width="14" height="14" alt="Normal">
-            </button>
+          <div class="voice-style-container">
+            <!-- Discovery Label -->
+            <div class="voice-discovery-label" id="voiceDiscoveryLabel">
+              Curious? Switch voice styles to compare responses
+            </div>
+            
+            <div class="chat-voice-selector">
+              <button class="voice-style-btn" data-style="ninja" data-tooltip="Change voice style to ninja" aria-label="Change voice style to ninja">
+                <img src="/static/ninja-star.svg" class="voice-icon" width="14" height="14" alt="Ninja">
+              </button>
+              <button class="voice-style-btn" data-style="pirate" data-tooltip="Change voice style to pirate" aria-label="Change voice style to pirate">
+                <img src="/static/pirate01.svg" class="voice-icon" width="14" height="14" alt="Pirate">
+              </button>
+              <button class="voice-style-btn" data-style="surfer" data-tooltip="Change voice style to surfer dude" aria-label="Change voice style to surfer dude">
+                <img src="/static/wave01.svg" class="voice-icon" width="14" height="14" alt="Surfer">
+              </button>
+              <button class="voice-style-btn active" data-style="normal" data-tooltip="Change voice style back to normal" aria-label="Change voice style back to normal">
+                <img src="/static/person.svg" class="voice-icon" width="14" height="14" alt="Normal">
+              </button>
+            </div>
           </div>
           
           <div class="composer-container">
@@ -186,10 +193,11 @@
             <label for="feedback-text">Your feedback (max 300 characters):</label>
             <textarea 
               id="feedback-text" 
-              name="text" 
+              name="feedback" 
               placeholder="Share your thoughts about Charlie Chat..."
               maxlength="300"
               rows="4"
+              required
             ></textarea>
             <div class="feedback-char-count">
               <span id="char-count">0</span>/300
@@ -197,20 +205,31 @@
           </div>
           
           <div class="feedback-form-group">
-            <label>How do you feel about your experience?</label>
+            <label for="feedback-name">Your name (optional):</label>
+            <input 
+              type="text" 
+              id="feedback-name" 
+              name="name" 
+              placeholder="Enter your name..."
+              maxlength="100"
+            >
+          </div>
+          
+          <div class="feedback-form-group">
+            <label>How do you feel about your experience? <span class="required">*</span></label>
             <div class="feedback-sentiment-options">
               <label class="sentiment-option">
-                <input type="radio" name="sentiment" value="positive">
+                <input type="radio" name="experience" value="positive" required>
                 <span class="sentiment-emoji">👍</span>
                 <span class="sentiment-label">Positive</span>
               </label>
               <label class="sentiment-option">
-                <input type="radio" name="sentiment" value="neutral">
+                <input type="radio" name="experience" value="neutral" required>
                 <span class="sentiment-emoji">😐</span>
                 <span class="sentiment-label">Neutral</span>
               </label>
               <label class="sentiment-option">
-                <input type="radio" name="sentiment" value="negative">
+                <input type="radio" name="experience" value="negative" required>
                 <span class="sentiment-emoji">👎</span>
                 <span class="sentiment-label">Negative</span>
               </label>
@@ -240,6 +259,10 @@
         // Initialize session state as empty object
         document.getElementById('session_state').value = '{}';
         console.log('Generated session ID:', sessionId);
+        
+        // Initialize question counter for voice discovery
+        window.questionCount = 0;
+        window.voiceDiscoveryShown = false;
       });
 
       // Handle HTMX responses to update session state
@@ -253,6 +276,15 @@
         
         console.log('HTMX afterRequest event fired, status:', event.detail.xhr.status);
         if (event.detail.xhr.status === 200) {
+          // Increment question counter and check for voice discovery
+          window.questionCount++;
+          console.log('Question count:', window.questionCount);
+          
+          // Show voice discovery label after 2 questions
+          if (window.questionCount >= 2 && !window.voiceDiscoveryShown) {
+            showVoiceDiscoveryLabel();
+          }
+          
           try {
             // Try to extract session state from the response HTML
             const responseText = event.detail.xhr.responseText;
@@ -701,8 +733,8 @@
             
             // Update submit button state
             const hasText = count > 0;
-            const hasSentiment = document.querySelector('input[name="sentiment"]:checked');
-            feedbackSubmit.disabled = !(hasText || hasSentiment);
+            const hasExperience = document.querySelector('input[name="experience"]:checked');
+            feedbackSubmit.disabled = !(hasText && hasExperience);
           }
 
           // Event listeners
@@ -712,7 +744,9 @@
           feedbackCancel.addEventListener('click', closeModal);
           feedbackText.addEventListener('input', updateCharCount);
           
-          sentimentInputs.forEach(input => {
+          // Add event listeners for experience radio buttons
+          const experienceInputs = document.querySelectorAll('input[name="experience"]');
+          experienceInputs.forEach(input => {
             input.addEventListener('change', updateCharCount);
           });
 
@@ -722,13 +756,13 @@
             
             const formData = new FormData(feedbackForm);
             const data = {
-              text: formData.get('text').trim(),
-              sentiment: formData.get('sentiment'),
-              session_id: 'web-session'
+              feedback: formData.get('feedback').trim(),
+              experience: formData.get('experience'),
+              name: formData.get('name').trim()
             };
 
-            if (!data.text && !data.sentiment) {
-              alert('Please provide feedback text or select a sentiment.');
+            if (!data.feedback || !data.experience) {
+              alert('Please provide feedback text and select your experience rating.');
               return;
             }
 
@@ -775,6 +809,38 @@
 
         // Initialize feedback modal
         initFeedbackModal();
+
+      // Voice Discovery Label Functions
+      function showVoiceDiscoveryLabel() {
+        const label = document.getElementById('voiceDiscoveryLabel');
+        const voiceSelector = document.querySelector('.chat-voice-selector');
+        
+        if (label && voiceSelector && !window.voiceDiscoveryShown) {
+          // Show the label
+          label.classList.add('show');
+          
+          // Show the voice selector with its normal fade animation
+          voiceSelector.style.opacity = '1';
+          voiceSelector.style.transform = 'translateX(0)';
+          
+          // Show all voice buttons with their normal animation
+          const voiceButtons = voiceSelector.querySelectorAll('.voice-style-btn');
+          voiceButtons.forEach(btn => {
+            btn.style.opacity = '1';
+            btn.style.transform = 'translateX(0)';
+          });
+          
+          // Mark as shown
+          window.voiceDiscoveryShown = true;
+          
+          // Hide the label after 4 seconds (2 seconds longer)
+          setTimeout(() => {
+            label.classList.remove('show');
+          }, 4000);
+          
+          console.log('Voice discovery label shown');
+        }
+      }
 
       // Quick toggles to try background experiments
       function setBg(mode) {
