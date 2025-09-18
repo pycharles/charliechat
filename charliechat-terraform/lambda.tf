@@ -36,14 +36,14 @@ resource "aws_iam_role_policy_attachment" "lambda_bedrock_access" {
 
 # API Lambda function (FastAPI + Mangum)
 resource "aws_lambda_function" "charlie_api" {
-  filename         = "../charliechat-api/lambda_deployment.zip"
+  filename         = "../charliechat-api/lambda-deployment.zip"
   function_name    = "charlie-chat-api"
   role            = aws_iam_role.lambda_execution_role.arn
   handler         = "lambda_api.lambda_api.handler"
   runtime         = "python3.11"
   timeout         = 60
   memory_size     = 256
-  source_code_hash = filebase64sha256("../charliechat-api/lambda_deployment.zip")
+  source_code_hash = filebase64sha256("../charliechat-api/lambda-deployment.zip")
 
   environment {
     variables = {
