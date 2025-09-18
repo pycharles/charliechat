@@ -44,25 +44,44 @@ def load_journal_entries() -> list:
             with open(md_file, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Extract title from filename (remove .md and replace - with spaces)
-            title = md_file.stem.replace('-', ' ').title()
-            
-            # Extract date from filename if it starts with YYYY-MM-DD
+            # Extract title and date from filename
+            # Handle date format: 2024-01-15-title -> Title (for blog) and 2024 (for nav)
+            nav_title = None
+            blog_title = None
             date_str = None
+            nav_date = None
+            
             if len(md_file.stem) >= 10 and md_file.stem[:4].isdigit():
-                try:
-                    date_str = md_file.stem[:10]
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                    date_str = date_obj.strftime('%B %d, %Y')
-                except ValueError:
-                    pass
+                # Split date and title parts
+                parts = md_file.stem.split('-', 3)  # Split into max 4 parts
+                if len(parts) >= 4:
+                    date_part = f"{parts[0]}-{parts[1]}-{parts[2]}"
+                    title_part = parts[3].replace('-', ' ').title()
+                    blog_title = title_part  # Just the title for blog
+                    nav_title = title_part  # Just the title for nav
+                    nav_date = date_part  # Full YYYY-MM-DD for nav
+                    
+                    # Full date for blog display
+                    try:
+                        date_obj = datetime.strptime(date_part, '%Y-%m-%d')
+                        date_str = date_obj.strftime('%B %d, %Y')
+                    except ValueError:
+                        pass
+                else:
+                    blog_title = md_file.stem.replace('-', ' ').title()
+                    nav_title = md_file.stem.replace('-', ' ').title()
+            else:
+                blog_title = md_file.stem.replace('-', ' ').title()
+                nav_title = md_file.stem.replace('-', ' ').title()
             
             # Convert markdown to HTML
             html_content = markdown.markdown(content)
             
             entries.append({
-                'title': title,
-                'date': date_str,
+                'title': blog_title,  # For blog display (no date)
+                'nav_title': nav_title,  # For navigation display
+                'date': date_str,  # Full date for blog display
+                'nav_date': nav_date,  # Year only for navigation
                 'content': html_content,
                 'filename': md_file.name
             })
