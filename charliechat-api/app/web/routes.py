@@ -33,13 +33,43 @@ chat_service = ChatService(settings)
 
 def load_journal_entries() -> list:
     """Load and parse journal entries from markdown files"""
-    journal_dir = Path(__file__).parent.parent.parent / "journal-md"
+    # Try multiple possible locations for journal files
+    possible_paths = [
+        # Local development path
+        Path(__file__).parent.parent.parent / "journal-md",
+        # Lambda deployment path (journal files copied to app directory)
+        Path(__file__).parent.parent / "journal-md",
+        # Alternative Lambda path
+        Path("/tmp/journal-md"),
+        # Current working directory fallback
+        Path("journal-md")
+    ]
+    
+    journal_dir = None
+    for path in possible_paths:
+        if path.exists():
+            journal_dir = path
+            print(f"Found journal directory at: {journal_dir}")
+            break
+    
     entries = []
     
-    if not journal_dir.exists():
+    if not journal_dir:
+        print("Warning: No journal directory found in any expected location")
+        print(f"Searched paths: {[str(p) for p in possible_paths]}")
         return entries
     
-    for md_file in sorted(journal_dir.glob("*.md"), reverse=True):
+    # Filter out .beta.md files and load only .md files
+    md_files = sorted(journal_dir.glob("*.md"), reverse=True)
+    print(f"Found {len(md_files)} markdown files in journal directory")
+    
+    for md_file in md_files:
+        # Skip .beta.md files
+        if md_file.name.endswith('.beta.md'):
+            print(f"Skipping beta file: {md_file.name}")
+            continue
+        
+        print(f"Processing journal file: {md_file.name}")
         try:
             with open(md_file, 'r', encoding='utf-8') as f:
                 content = f.read()

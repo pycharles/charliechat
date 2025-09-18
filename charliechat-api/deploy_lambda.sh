@@ -60,6 +60,16 @@ create_lambda_zip() {
     cp -r lambda_api/ temp_lambda_package/
     cp -r app/ temp_lambda_package/
     
+    # Copy journal-md directory, excluding .beta.md files
+    if [ -d "journal-md" ]; then
+        print_status "Copying journal-md directory (excluding .beta.md files)..."
+        mkdir -p temp_lambda_package/app/journal-md
+        # Copy all .md files except .beta.md files
+        find journal-md -name "*.md" ! -name "*.beta.md" -exec cp {} temp_lambda_package/app/journal-md/ \;
+    else
+        print_warning "journal-md directory not found, skipping journal files"
+    fi
+    
     # Copy Python packages to the root level for proper import
     cp -r .venv/lib/python3.11/site-packages/* temp_lambda_package/
     
