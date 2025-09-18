@@ -52,7 +52,7 @@ resource "aws_apigatewayv2_api" "charlie_api" {
   description   = "Charlie Chat API Gateway"
 }
 
-# Lambda integration
+# Lambda integration for main API
 resource "aws_apigatewayv2_integration" "charlie_lambda" {
   api_id                   = aws_apigatewayv2_api.charlie_api.id
   integration_type         = "AWS_PROXY"
@@ -61,7 +61,23 @@ resource "aws_apigatewayv2_integration" "charlie_lambda" {
   payload_format_version   = "2.0"
 }
 
-# Default route (catches all requests)
+# Lambda integration for feedback
+resource "aws_apigatewayv2_integration" "feedback_lambda" {
+  api_id                   = aws_apigatewayv2_api.charlie_api.id
+  integration_type         = "AWS_PROXY"
+  integration_uri          = aws_lambda_function.feedback_lambda.invoke_arn
+  integration_method       = "POST"
+  payload_format_version   = "2.0"
+}
+
+# Feedback route (specific POST /feedback)
+resource "aws_apigatewayv2_route" "feedback" {
+  api_id    = aws_apigatewayv2_api.charlie_api.id
+  route_key = "POST /feedback"
+  target    = "integrations/${aws_apigatewayv2_integration.feedback_lambda.id}"
+}
+
+# Default route (catches all other requests)
 resource "aws_apigatewayv2_route" "default" {
   api_id    = aws_apigatewayv2_api.charlie_api.id
   route_key = "$default"

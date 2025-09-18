@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Deploy Lambda Function for Charlie Chat
-# Deploys the main API Lambda (FastAPI + Lex integration)
+# Deploy Lambda Functions for Charlie Chat
+# Deploys the main API Lambda and/or feedback Lambda
+# Usage: ./deploy_lambda.sh [api|mail|all]
+#   api: Deploy only the main API Lambda (default)
+#   mail: Deploy only the feedback Lambda
+#   all: Deploy both Lambdas (default if no argument)
 
 set -e
 
@@ -47,8 +51,8 @@ install_dependencies() {
     pip install -r requirements.txt
 }
 
-# Function to create zip file for the lambda
-create_lambda_zip() {
+# Function to create zip file for the API lambda
+create_api_lambda_zip() {
     print_status "Creating lambda-deployment.zip for charlie-chat-api..."
     
     # Remove existing zip if it exists
@@ -96,8 +100,45 @@ create_lambda_zip() {
     print_status "Created lambda-deployment.zip"
 }
 
-# Function to deploy the lambda function
-deploy_lambda() {
+# Function to create zip file for the feedback lambda
+create_feedback_lambda_zip() {
+    print_status "Creating feedback-lambda-deployment.zip for charlie-feedback-lambda..."
+    
+    # Remove existing zip if it exists
+    rm -f "feedback-lambda-deployment.zip"
+    
+    # Create zip with just the feedback lambda file and boto3
+    mkdir -p temp_feedback_package
+    
+    # Copy the feedback lambda file
+    cp lambda_feedback.py temp_feedback_package/
+    
+    # Copy boto3 and its dependencies
+    cp -r .venv/lib/python3.11/site-packages/boto3 temp_feedback_package/
+    cp -r .venv/lib/python3.11/site-packages/botocore temp_feedback_package/
+    cp -r .venv/lib/python3.11/site-packages/jmespath temp_feedback_package/
+    cp -r .venv/lib/python3.11/site-packages/s3transfer temp_feedback_package/
+    cp -r .venv/lib/python3.11/site-packages/urllib3 temp_feedback_package/
+    
+    # Create zip from the feedback package
+    cd temp_feedback_package
+    zip -r "../feedback-lambda-deployment.zip" . \
+        -x "*.pyc" \
+        -x "__pycache__/*" \
+        -x "*.env" \
+        -x "*.log" \
+        -x ".DS_Store" \
+        -x "*.git*"
+    cd ..
+    
+    # Clean up temporary directory
+    rm -rf temp_feedback_package
+    
+    print_status "Created feedback-lambda-deployment.zip"
+}
+
+# Function to deploy the API lambda function
+deploy_api_lambda() {
     print_status "Deploying charlie-chat-api..."
     
     aws lambda update-function-code \
@@ -107,11 +148,52 @@ deploy_lambda() {
     print_status "Successfully deployed charlie-chat-api"
 }
 
-# Main deployment
-print_status "Deploying Charlie Chat API Lambda..."
-activate_venv
-install_dependencies
-create_lambda_zip
-deploy_lambda
+# Function to deploy the feedback lambda function
+deploy_feedback_lambda() {
+    print_status "Deploying charlie-feedback-lambda..."
+    
+    aws lambda update-function-code \
+        --function-name "charlie-feedback-lambda" \
+        --zip-file "fileb://feedback-lambda-deployment.zip"
+    
+    print_status "Successfully deployed charlie-feedback-lambda"
+}
+
+# Parse command line arguments
+DEPLOY_TARGET=${1:-all}
+
+case $DEPLOY_TARGET in
+    "api")
+        print_status "Deploying Charlie Chat API Lambda only..."
+        activate_venv
+        install_dependencies
+        create_api_lambda_zip
+        deploy_api_lambda
+        ;;
+    "mail")
+        print_status "Deploying Charlie Chat Feedback Lambda only..."
+        activate_venv
+        install_dependencies
+        create_feedback_lambda_zip
+        deploy_feedback_lambda
+        ;;
+    "all")
+        print_status "Deploying both Charlie Chat Lambdas..."
+        activate_venv
+        install_dependencies
+        create_api_lambda_zip
+        create_feedback_lambda_zip
+        deploy_api_lambda
+        deploy_feedback_lambda
+        ;;
+    *)
+        print_error "Invalid argument: $DEPLOY_TARGET"
+        echo "Usage: $0 [api|mail|all]"
+        echo "  api: Deploy only the main API Lambda"
+        echo "  mail: Deploy only the feedback Lambda"
+        echo "  all: Deploy both Lambdas (default)"
+        exit 1
+        ;;
+esac
 
 print_status "Deployment complete!"
