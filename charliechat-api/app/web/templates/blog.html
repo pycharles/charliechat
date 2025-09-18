@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/main.css?v=20250917-01">
+    <link rel="stylesheet" href="/static/css/main.css?v=20250918-02">
   </head>
   <body>
     <main class="page">
@@ -43,6 +43,18 @@
           <a href="/" class="nav-link">Back to Chat</a>
           <a href="#" class="nav-link active" data-tab="journal">Dev Journal</a>
         </nav>
+        
+        <!-- Mobile Journal Dropdown -->
+        <div class="mobile-journal-dropdown">
+          <label for="journal-select" class="dropdown-label">📖 Select Article:</label>
+          <select id="journal-select" class="journal-select">
+            {% for entry in journal_entries %}
+            <option value="{{ entry.filename | replace('.md', '') }}" {% if loop.first %}selected{% endif %}>
+              {{ entry.nav_date }} - {{ entry.nav_title }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
       </header>
 
       <!-- Main Content Area -->
@@ -84,6 +96,7 @@
       </main>
     </main>
 
+
     <!-- Image Modal -->
     <div class="image-modal" id="imageModal">
       <div class="image-modal-overlay" onclick="closeImageModal()"></div>
@@ -106,6 +119,7 @@
       document.addEventListener('DOMContentLoaded', function() {
         const navItems = document.querySelectorAll('.journal-nav .nav-item');
         const articles = document.querySelectorAll('.journal-article');
+        const journalSelect = document.getElementById('journal-select');
         
         // Show first article by default
         if (articles.length > 0) {
@@ -122,7 +136,30 @@
           }
         });
         
-        // Handle navigation clicks
+        // Handle dropdown selection
+        if (journalSelect) {
+          journalSelect.addEventListener('change', function() {
+            const selectedValue = this.value;
+            
+            // Update sidebar navigation
+            navItems.forEach(nav => {
+              nav.classList.remove('active');
+              if (nav.getAttribute('data-article') === selectedValue) {
+                nav.classList.add('active');
+              }
+            });
+            
+            // Show selected article
+            articles.forEach(article => {
+              article.style.display = 'none';
+              if (article.id === selectedValue) {
+                article.style.display = 'block';
+              }
+            });
+          });
+        }
+        
+        // Handle sidebar navigation clicks
         navItems.forEach(item => {
           item.addEventListener('click', function(e) {
             e.preventDefault();
@@ -136,6 +173,11 @@
             // Get target article ID
             const targetId = this.getAttribute('data-article');
             const targetArticle = document.getElementById(targetId);
+            
+            // Update dropdown selection
+            if (journalSelect) {
+              journalSelect.value = targetId;
+            }
             
             // Hide all articles
             articles.forEach(article => {
