@@ -1,12 +1,17 @@
 # MVP Achieved
 
-> Big news, the MVP is ready to share! I focused on building, not journaling. I planned to write daily notes. I kept coding instead. I will backfill short entries below.
+> 🚀 The MVP is ready to share! I focused on building instead of journaling being heads-down coding, shipping and solving problems. The result is something I am proud to put in front of others. I will backfill short entries to capture the journey.
 
 ## Announcement
-The MVP is live and ready for feedback. I still have plenty of TODOs. I will ship improvements in small batches. I want real input before I polish the small stuff.
+The MVP is live and ready for feedback. I still have plenty of TODOs. I will ship improvements in small batches. I want real input before I polish the small stuff, please try it out and tell me what you think.
 
-## Costs
-$1.20 total for the week. I kept AWS costs tight with deliberate choices and strict limits. I will post a detailed cost breakdown soon. Interestingly, my two highest costs were DNS hosting ($0.50/month per zone — I could have left this with my registrar) and Amazon Lex, which I ultimately removed in favor of handling all logic in Lambda.
+## Costs So Far
+**Total spend:** **$1.20 for the entire week.**  
+I kept AWS costs tight with deliberate choices and strict limits. A detailed cost breakdown is coming soon, but interestingly the two biggest costs were:
+
+- **DNS Hosting:** $0.50/month per zone (I could have left this with my registrar)
+- **Amazon Lex:** Which I ultimately removed in favor of handling all logic in Lambda 
+
 &nbsp;  
 &nbsp;  
 
@@ -16,6 +21,7 @@ $1.20 total for the week. I kept AWS costs tight with deliberate choices and str
 
 &nbsp;  
 ## Key Milestones  
+Over the past week I shipped a full end-to-end solution that combines infrastructure, application code and AI-powered interaction. Highlights include:
 
 - **Knowledge Base Integration** – Wired in resume context, tuned retrieval to keep responses focused.  
 - **Prompt Engineering** – Switched to first-person voice, shortened answers and added follow-up prompts.  
@@ -32,7 +38,9 @@ $1.20 total for the week. I kept AWS costs tight with deliberate choices and str
 - **Cost Discipline** – Logged token usage, setup an AWS Budget, stayed with on-demand models and removed Lex to simplify architecture, have more control and save money.  
 
 
-## What's next?  Tell me what you think!
-I want your feedback. Try the site. Break it if you can. Tell me what felt smooth and what did not.  
+## What's next?
+Your fedback matters.
+
+Try the site, click around, ask questions — even try to break it. Tell me what felt smooth and what needs work.
 
 Feel free to either email me or use the feedback form.  
