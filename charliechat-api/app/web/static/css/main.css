@@ -416,7 +416,7 @@ footer {
 
 .voice-style-container {
   position: absolute;
-  top: 16px;
+  top: 8px;
   right: 16px;
   display: flex;
   flex-direction: column;
@@ -854,19 +854,30 @@ footer {
     gap: 16px;
     padding: 16px;
   }
+  .navbar-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    min-height: 48px;
+  }
   .navbar-brand {
     order: 1;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .navbar-actions {
+    order: 2;
+    gap: 8px;
+    position: static;
+    flex-shrink: 0;
+    margin-left: 12px;
   }
   .navbar-nav {
     order: 3;
     width: 100%;
     justify-content: space-around;
     gap: 4px;
-  }
-  .navbar-actions {
-    order: 2;
-    gap: 12px;
-    position: static;
   }
   .nav-link {
     padding: 6px 12px;
@@ -1125,7 +1136,7 @@ footer {
 }
 @media (max-width: 768px) {
   .chat-feedback-btn {
-    bottom: 65px;
+    bottom: 80px;
     right: 10px;
     padding: 3px 6px;
   }
@@ -1139,6 +1150,31 @@ footer {
 }
 
 @media (max-width: 480px) {
+  .navbar-top {
+    gap: 8px;
+    padding: 0 4px;
+  }
+  .navbar-brand {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .navbar-brand h1 {
+    font-size: 18px;
+  }
+  .navbar-brand p {
+    font-size: 12px;
+  }
+  .navbar-actions {
+    gap: 6px;
+    margin-left: 8px;
+  }
+  .social-link {
+    padding: 6px;
+  }
+  .social-link .icon {
+    width: 16px;
+    height: 16px;
+  }
   .chat {
     height: calc(100vh - 280px);
     padding-bottom: 60px;
@@ -1146,6 +1182,37 @@ footer {
   .journal-button {
     padding: 8px 12px;
     font-size: 13px;
+  }
+}
+@media (max-width: 360px) {
+  .navbar-top {
+    gap: 4px;
+    padding: 0 2px;
+  }
+  .navbar-brand {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .navbar-brand h1 {
+    font-size: 16px;
+  }
+  .navbar-brand p {
+    font-size: 11px;
+  }
+  .navbar-actions {
+    gap: 4px;
+    margin-left: 4px;
+  }
+  .social-link {
+    padding: 4px;
+  }
+  .social-link .icon {
+    width: 14px;
+    height: 14px;
+  }
+  .chat-feedback-btn {
+    bottom: 85px;
+    right: 8px;
   }
 }
 .indicator {
