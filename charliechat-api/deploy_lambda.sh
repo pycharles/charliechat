@@ -74,6 +74,14 @@ create_api_lambda_zip() {
         print_warning "journal-md directory not found, skipping journal files"
     fi
     
+    # Copy LICENSE file
+    if [ -f "../LICENSE" ]; then
+        print_status "Copying LICENSE file..."
+        cp ../LICENSE temp_lambda_package/
+    else
+        print_warning "LICENSE file not found, skipping"
+    fi
+    
     # Copy Python packages to the root level for proper import
     cp -r .venv/lib/python3.11/site-packages/* temp_lambda_package/
     

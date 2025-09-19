@@ -15,6 +15,7 @@ import json
 
 from .web.routes import router as web_router
 from .middleware.timing import TimingMiddleware
+from .analytics import analytics_posthog_fastapi, capture_event
 
 # Create FastAPI app
 app = FastAPI(
@@ -43,6 +44,19 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "web" / "static"), name="s
 
 # Include web routes
 app.include_router(web_router)
+
+# Initialize analytics on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize analytics and capture server start event"""
+    if analytics_posthog_fastapi:
+        capture_event("server_start", {
+            "app_version": "0.1.0",
+            "environment": "production" if analytics_posthog_fastapi else "development"
+        })
+        print("Analytics initialized: PostHog enabled")
+    else:
+        print("Analytics initialized: PostHog disabled (not in Lambda environment)")
 
 # Simple rate limiting storage (in production, use Redis or similar)
 feedback_submissions = defaultdict(list)
@@ -108,6 +122,14 @@ async def submit_feedback(request: Request):
     
     # Log feedback (in production, send to CloudWatch, DynamoDB, or S3)
     print(f"Feedback received: {json.dumps(feedback_data)}")
+    
+    # Capture analytics event
+    capture_event("feedback_submitted", {
+        "sentiment": sentiment,
+        "text_length": len(text),
+        "session_id": session_id,
+        "has_session_id": bool(session_id)
+    }, distinct_id=client_ip)
     
     # TODO: Store in DynamoDB or S3 in production
     # For now, just log to console

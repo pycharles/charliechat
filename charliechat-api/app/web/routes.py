@@ -134,6 +134,42 @@ def favicon():
     return RedirectResponse(url="/static/favicon.svg")
 
 
+@router.get("/LICENSE", response_class=HTMLResponse)
+def license(request: Request) -> HTMLResponse:
+    """Serve the MIT License as HTML"""
+    # Try multiple possible locations for LICENSE file
+    possible_paths = [
+        # Parent directory (development)
+        Path(__file__).parent.parent.parent / "LICENSE",
+        # Lambda deployment path (LICENSE copied to app directory)
+        Path(__file__).parent.parent / "LICENSE",
+        # Current working directory fallback
+        Path("LICENSE"),
+        # Parent of current working directory
+        Path("..") / "LICENSE"
+    ]
+    
+    license_path = None
+    for path in possible_paths:
+        if path.exists():
+            license_path = path
+            break
+    
+    if not license_path:
+        raise HTTPException(status_code=404, detail="License file not found")
+    
+    try:
+        with open(license_path, 'r', encoding='utf-8') as f:
+            license_content = f.read()
+        
+        return templates.TemplateResponse("license.html", {
+            "request": request,
+            "license_content": license_content
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading license file: {str(e)}")
+
+
 @router.get("/blog", response_class=HTMLResponse)
 def blog(request: Request) -> HTMLResponse:
     """Serve the dev journal page"""
