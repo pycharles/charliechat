@@ -11,8 +11,10 @@ from pathlib import Path
 import os
 import uuid
 import traceback
+import re
 from datetime import datetime
 import markdown
+from fastapi.responses import Response
 
 from ..services import ChatService
 from ..config import get_settings
@@ -29,6 +31,118 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # Initialize services
 settings = get_settings()
 chat_service = ChatService(settings)
+
+
+def generate_slug(title: str) -> str:
+    """Generate a URL-friendly slug from a title"""
+    # Convert to lowercase
+    slug = title.lower()
+    # Replace spaces and special characters with hyphens
+    slug = re.sub(r'[^\w\s-]', '', slug)
+    # Replace spaces with hyphens
+    slug = re.sub(r'[-\s]+', '-', slug)
+    # Remove leading/trailing hyphens
+    slug = slug.strip('-')
+    return slug
+
+
+def generate_sitemap() -> str:
+    """Generate XML sitemap for all pages"""
+    base_url = "https://charliechat.com"  # Update this to your actual domain
+    journal_entries = load_journal_entries()
+    
+    # Get current timestamp for sitemap generation
+    current_time = datetime.utcnow().strftime('%Y-%m-%d')
+    
+    # Start building XML
+    xml_parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+    ]
+    
+    # Add static pages
+    static_pages = [
+        {
+            'url': f'{base_url}/',
+            'lastmod': current_time,
+            'changefreq': 'weekly',
+            'priority': '1.0'
+        },
+        {
+            'url': f'{base_url}/blog',
+            'lastmod': current_time,
+            'changefreq': 'weekly',
+            'priority': '0.8'
+        },
+        {
+            'url': f'{base_url}/privacy',
+            'lastmod': current_time,
+            'changefreq': 'monthly',
+            'priority': '0.5'
+        },
+        {
+            'url': f'{base_url}/terms',
+            'lastmod': current_time,
+            'changefreq': 'monthly',
+            'priority': '0.5'
+        },
+        {
+            'url': f'{base_url}/LICENSE',
+            'lastmod': current_time,
+            'changefreq': 'yearly',
+            'priority': '0.3'
+        }
+    ]
+    
+    # Add static pages to sitemap
+    for page in static_pages:
+        xml_parts.append('  <url>')
+        xml_parts.append(f'    <loc>{page["url"]}</loc>')
+        xml_parts.append(f'    <lastmod>{page["lastmod"]}</lastmod>')
+        xml_parts.append(f'    <changefreq>{page["changefreq"]}</changefreq>')
+        xml_parts.append(f'    <priority>{page["priority"]}</priority>')
+        xml_parts.append('  </url>')
+    
+    # Add blog posts with their actual modification dates
+    for entry in journal_entries:
+        # Get file modification date
+        try:
+            # Try to find the actual markdown file to get its modification date
+            possible_paths = [
+                Path(__file__).parent.parent.parent / "journal-md" / entry['filename'],
+                Path(__file__).parent.parent / "journal-md" / entry['filename'],
+                Path("/tmp/journal-md") / entry['filename'],
+                Path("journal-md") / entry['filename']
+            ]
+            
+            file_path = None
+            for path in possible_paths:
+                if path.exists():
+                    file_path = path
+                    break
+            
+            if file_path:
+                # Get file modification time
+                mod_time = datetime.fromtimestamp(file_path.stat().st_mtime)
+                lastmod = mod_time.strftime('%Y-%m-%d')
+            else:
+                # Fallback to current date if file not found
+                lastmod = current_time
+        except Exception:
+            # Fallback to current date on any error
+            lastmod = current_time
+        
+        xml_parts.append('  <url>')
+        xml_parts.append(f'    <loc>{base_url}/blog/{entry["slug"]}</loc>')
+        xml_parts.append(f'    <lastmod>{lastmod}</lastmod>')
+        xml_parts.append('    <changefreq>monthly</changefreq>')
+        xml_parts.append('    <priority>0.6</priority>')
+        xml_parts.append('  </url>')
+    
+    # Close XML
+    xml_parts.append('</urlset>')
+    
+    return '\n'.join(xml_parts)
 
 
 def load_journal_entries() -> list:
@@ -107,13 +221,23 @@ def load_journal_entries() -> list:
             # Convert markdown to HTML
             html_content = markdown.markdown(content)
             
+            # Generate slug for URL
+            slug = generate_slug(blog_title)
+            
+            # Generate meta description (first ~160 characters of content, stripped of markdown)
+            meta_description = re.sub(r'[#*`]', '', content).strip()
+            meta_description = re.sub(r'\s+', ' ', meta_description)
+            meta_description = meta_description[:160] + '...' if len(meta_description) > 160 else meta_description
+            
             entries.append({
                 'title': blog_title,  # For blog display (no date)
                 'nav_title': nav_title,  # For navigation display
                 'date': date_str,  # Full date for blog display
                 'nav_date': nav_date,  # Year only for navigation
                 'content': html_content,
-                'filename': md_file.name
+                'filename': md_file.name,
+                'slug': slug,  # URL-friendly slug
+                'meta_description': meta_description  # SEO meta description
             })
         except Exception as e:
             print(f"Error loading {md_file}: {e}")
@@ -125,7 +249,7 @@ def load_journal_entries() -> list:
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     """Serve the main chat interface"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("chat.html", {"request": request})
 
 
 @router.get("/favicon.ico")
@@ -177,6 +301,84 @@ def blog(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("blog.html", {
         "request": request,
         "journal_entries": journal_entries
+    })
+
+
+@router.get("/blog/{slug}", response_class=HTMLResponse)
+def blog_post(request: Request, slug: str) -> HTMLResponse:
+    """Serve blog page with specific article highlighted"""
+    journal_entries = load_journal_entries()
+    
+    # Find the entry with matching slug
+    target_entry = None
+    for journal_entry in journal_entries:
+        if journal_entry['slug'] == slug:
+            target_entry = journal_entry
+            break
+    
+    if not target_entry:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+    
+    return templates.TemplateResponse("blog.html", {
+        "request": request,
+        "journal_entries": journal_entries,
+        "target_slug": slug  # Pass the target slug to highlight the correct article
+    })
+
+
+@router.get("/blog/{slug}/", response_class=HTMLResponse)
+def blog_post_trailing_slash(request: Request, slug: str) -> HTMLResponse:
+    """Redirect blog post with trailing slash to without trailing slash"""
+    return RedirectResponse(url=f"/blog/{slug}", status_code=301)
+
+
+@router.get("/sitemap")
+def sitemap_html(request: Request):
+    """Display HTML sitemap page"""
+    journal_entries = load_journal_entries()
+    
+    # Convert journal entries to blog posts format for template
+    blog_posts = []
+    for entry in journal_entries:
+        blog_posts.append({
+            'title': entry['title'],
+            'slug': entry['slug'],
+            'date': entry['date']
+        })
+    
+    return templates.TemplateResponse("sitemap.html", {
+        "request": request,
+        "title": "Sitemap",
+        "blog_posts": blog_posts
+    })
+
+
+@router.get("/sitemap.xml")
+def sitemap_xml():
+    """Generate and return XML sitemap for search engines"""
+    sitemap_xml = generate_sitemap()
+    return Response(
+        content=sitemap_xml,
+        media_type="application/xml",
+        headers={"Content-Type": "application/xml; charset=utf-8"}
+    )
+
+
+@router.get("/privacy", response_class=HTMLResponse)
+def privacy_policy(request: Request) -> HTMLResponse:
+    """Serve privacy policy page"""
+    return templates.TemplateResponse("privacy.html", {
+        "request": request,
+        "title": "Privacy Policy"
+    })
+
+
+@router.get("/terms", response_class=HTMLResponse)
+def terms_of_service(request: Request) -> HTMLResponse:
+    """Serve terms of service page"""
+    return templates.TemplateResponse("terms.html", {
+        "request": request,
+        "title": "Terms of Service"
     })
 
 

@@ -1,0 +1,49 @@
+# CharlieChat Development Rules
+
+## CSS/Styling
+- **ALWAYS edit SCSS files, never the compiled CSS files**
+- Source files are in `charliechat-api/app/web/static/scss/`
+- Compiled files are in `charliechat-api/app/web/static/css/`
+- After editing SCSS, remind the user to run `make` to compile
+- Never modify `main.css` directly - always use `main.scss`
+
+## Project Structure
+- Main API code: `charliechat-api/app/`
+- Web templates: `charliechat-api/app/web/templates/`
+- Static assets: `charliechat-api/app/web/static/`
+- Terraform config: `charliechat-terraform/`
+- Journal content: `charliechat-api/journal-md/`
+
+## Development Workflow
+- Use the Makefile for compilation tasks
+- Test changes with `python -m pytest tests/ -v`
+- Check for linting errors after making changes
+- Always use absolute paths when possible
+
+## Memory Notes
+- User prefers using Makefile for compilation tasks
+- User uses SaaS Makefile to handle tasks
+- Project scripts must activate correct Python virtual environment
+
+# Blog Deep Links
+- Generate SEO-friendly slugs from blog post titles.
+- Create individual routes under /blog/[slug].
+- Add <title> and <meta description> per post.
+- Update blog index automatically to link to each post.
+
+# Sitemap Maintenance
+- Keep /sitemap.xml endpoint up to date when adding new pages or blog posts.
+- Sitemap automatically includes all static pages and blog posts with their slugs.
+- Blog post lastmod dates are based on actual file modification times.
+- Update base_url in generate_sitemap() function when deploying to production.
+- Test sitemap at /sitemap.xml after adding new content.
+
+# HTML Templates & Boilerplate Reduction
+- ALWAYS use Jinja2 template inheritance with base.html for new pages
+- Extend base.html instead of duplicating HTML structure
+- Use template blocks: title, description, nav_links, content, extra_head, extra_scripts
+- Create reusable components for repeated HTML patterns
+- Avoid duplicating header, footer, navigation, or common styling
+- When adding new pages, check if existing templates can be extended
+- Use {% extends "base.html" %} and {% block %} syntax for all new templates
+- Keep page-specific content in {% block content %} sections

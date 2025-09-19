@@ -214,7 +214,7 @@ terraform.tfstate*
 *.css.map
 
 # Lambda build artifacts
-lambda-deployment.zip
+*.zip
 lambda_package/
 
 # Ignore LLM training data
