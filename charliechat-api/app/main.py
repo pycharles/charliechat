@@ -5,6 +5,8 @@ This is the main FastAPI application entry point.
 It sets up the app, middleware, and includes all routes.
 """
 
+import logging
+import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,9 +15,14 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import json
 
+# Configure logging to DEBUG level for PostHog troubleshooting
+logging.basicConfig(level=logging.DEBUG)
+
 from .web.routes import router as web_router
 from .middleware.timing import TimingMiddleware
+from .middleware.session import SessionMiddleware
 from .analytics import analytics_posthog_fastapi, capture_event
+from fastapi.templating import Jinja2Templates
 
 # Create FastAPI app
 app = FastAPI(
@@ -23,6 +30,10 @@ app = FastAPI(
     version="0.1.0",
     description="AI-powered chat application with direct intent recognition and Bedrock integration"
 )
+
+
+# Add session middleware (before timing middleware to ensure session_id is available)
+app.add_middleware(SessionMiddleware)
 
 # Add timing middleware
 app.add_middleware(TimingMiddleware)
@@ -141,3 +152,56 @@ async def submit_feedback(request: Request):
 def health_check():
     """Health check endpoint for monitoring"""
     return {"status": "healthy", "service": "charlie-chat-api"}
+
+
+@app.get("/debug-posthog")
+def debug_posthog():
+    """Debug endpoint to test PostHog event sending"""
+    from .config import get_settings
+    settings = get_settings()
+    if not settings.debug:
+        raise HTTPException(status_code=404)
+    
+    try:
+        from .analytics.posthog_client import capture_event, flush_events
+        import os
+        
+        # Check environment variables
+        env_check = {
+            "AWS_EXECUTION_ENV": os.getenv("AWS_EXECUTION_ENV"),
+            "POSTHOG_API_KEY": "SET" if os.getenv("POSTHOG_API_KEY") else "NOT_SET",
+            "POSTHOG_HOST": os.getenv("POSTHOG_HOST", "default")
+        }
+        
+        # Try to send a test event
+        success = capture_event("debug_posthog_test", {
+            "test_type": "manual_debug",
+            "timestamp": datetime.now().isoformat(),
+            "environment_check": env_check
+        }, distinct_id="debug_test_user")
+        
+        if success:
+            flush_events()
+            return {
+                "status": "success",
+                "message": "PostHog debug test event sent",
+                "environment": env_check,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "PostHog debug test event failed to send",
+                "environment": env_check,
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"PostHog debug test failed with exception: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+# Debug routes removed - keeping only debug-posthog with guard
+

@@ -60,6 +60,12 @@ resource "aws_lambda_function" "charlie_api" {
       SYSTEM_PROMPT_TEMPLATE = data.dotenv.env.env["SYSTEM_PROMPT_TEMPLATE"]
       DEFAULT_PERSON       = data.dotenv.env.env["DEFAULT_PERSON"]
       DEBUG_LOGGING        = data.dotenv.env.env["DEBUG_LOGGING_PROD"]
+      
+      # PostHog Analytics Configuration
+      # POSTHOG_API_KEY: PostHog project API key (required for analytics)
+      # POSTHOG_HOST: PostHog host URL (optional, defaults to app.posthog.com)
+      POSTHOG_API_KEY      = data.dotenv.env.env["POSTHOG_API_KEY"]
+      POSTHOG_HOST         = data.dotenv.env.env["POSTHOG_HOST"]
     }
   }
 

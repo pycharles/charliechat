@@ -27,6 +27,16 @@ def _is_lambda_environment() -> bool:
     return bool(os.getenv("AWS_EXECUTION_ENV"))
 
 
+def _is_test_environment() -> bool:
+    """
+    Check if we're running in a test environment.
+    
+    Returns:
+        bool: True if running in tests, False otherwise
+    """
+    return os.getenv("PYTEST_CURRENT_TEST") is not None or "pytest" in os.getenv("_", "")
+
+
 def _initialize_posthog() -> Optional[Any]:
     """
     Initialize PostHog client if running in Lambda environment.
@@ -54,7 +64,32 @@ def _initialize_posthog() -> Optional[Any]:
         posthog.sync_mode = True  # Use sync mode for Lambda
         posthog.send = True  # Enable sending events
         
-        logger.info("PostHog initialized successfully for FastAPI Lambda")
+        # Enable debug mode only when our application debug is enabled
+        debug_enabled = os.getenv("DEBUG_LOGGING", "false").lower() == "true"
+        posthog.debug = debug_enabled
+        
+        logger.info(
+            "✅ PostHog client initialized: API key length=%s, host=%s, debug=%s",
+            len(api_key) if api_key else 0,
+            posthog.host,
+            debug_enabled
+        )
+        
+        # Send a debug startup event only when debug mode is enabled
+        if debug_enabled:
+            try:
+                posthog.capture(
+                    distinct_id="lambda_debug_test",
+                    event="lambda_posthog_debug_startup",
+                    properties={"debug": True, "environment": "lambda", "startup": True}
+                )
+                posthog.flush()
+                logger.info("✅ Sent PostHog debug startup event from Lambda")
+            except Exception as e:
+                logger.error(f"❌ Failed to send PostHog debug startup event: {e}")
+        else:
+            logger.debug("PostHog debug startup event skipped (debug mode disabled)")
+        
         return posthog
         
     except ImportError:
@@ -92,11 +127,18 @@ def capture_event(event_name: str, properties: Optional[Dict[str, Any]] = None, 
     Returns:
         bool: True if event was captured successfully, False otherwise
     """
+    # Skip capture in test environments
+    if _is_test_environment():
+        logger.debug(f"PostHog disabled in test environment: Event '{event_name}' not captured")
+        return False
+    
     client = get_posthog_client()
     
     if not client:
-        logger.debug(f"PostHog disabled: Event '{event_name}' not captured")
+        logger.warning(f"PostHog disabled: Event '{event_name}' not captured - client is None")
         return False
+    
+    logger.info(f"PostHog capturing event: {event_name} with distinct_id: {distinct_id or 'anonymous'}")
     
     try:
         # Use provided distinct_id or default to 'anonymous'
@@ -110,13 +152,21 @@ def capture_event(event_name: str, properties: Optional[Dict[str, Any]] = None, 
             "aws_region": os.getenv("AWS_REGION", "unknown"),
         })
         
+        # Debug: Log detailed capture attempt
+        logger.debug(f"About to call client.capture for {event_name}")
+        logger.debug(f"user_id={user_id}")
+        logger.debug(f"properties={event_properties}")
+        logger.debug(f"client.api_key length={len(client.api_key) if hasattr(client, 'api_key') else 'no api_key'}")
+        logger.debug(f"client.host={getattr(client, 'host', 'no host')}")
+        
         # Capture the event
-        client.capture(
+        capture_result = client.capture(
             distinct_id=user_id,
             event=event_name,
             properties=event_properties
         )
         
+        logger.debug(f"client.capture returned: {capture_result}")
         logger.debug(f"PostHog event captured: '{event_name}' for user '{user_id}'")
         return True
         
@@ -193,17 +243,37 @@ def flush_events() -> bool:
     """
     Flush pending PostHog events.
     
+    Note: This is a synchronous flush that may impact performance.
+    Consider batching events or using async flushing if performance becomes a concern.
+    
     Returns:
         bool: True if events were flushed successfully, False otherwise
     """
     client = get_posthog_client()
     
     if not client:
-        logger.debug("PostHog disabled: No events to flush")
+        logger.warning("PostHog disabled: No events to flush - client is None")
         return False
     
+    logger.info("PostHog flushing events...")
+    
     try:
-        client.flush()
+        # Debug: Check if client has any pending events
+        if hasattr(client, '_queue') and hasattr(client._queue, 'qsize'):
+            queue_size = client._queue.qsize()
+            logger.debug(f"Queue size before flush: {queue_size}")
+        elif hasattr(client, 'queue') and hasattr(client.queue, 'qsize'):
+            queue_size = client.queue.qsize()
+            logger.debug(f"Queue size before flush: {queue_size}")
+        else:
+            logger.debug("Cannot determine queue size")
+            
+        logger.debug(f"client.debug={getattr(client, 'debug', 'no debug attr')}")
+        logger.debug(f"client.sync_mode={getattr(client, 'sync_mode', 'no sync_mode attr')}")
+        logger.debug(f"client.send={getattr(client, 'send', 'no send attr')}")
+        
+        flush_result = client.flush()
+        logger.debug(f"client.flush() returned: {flush_result}")
         logger.debug("PostHog events flushed successfully")
         return True
         

@@ -20,6 +20,10 @@ from ..services import ChatService
 from ..config import get_settings
 from ..models.chat import ChatRequest, ChatResponse
 from ..utils.debug_logger import debug_logger
+from ..analytics.posthog_client import capture_event, flush_events
+import functools
+import inspect
+import logging
 
 # Initialize router
 router = APIRouter()
@@ -31,6 +35,137 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # Initialize services
 settings = get_settings()
 chat_service = ChatService(settings)
+
+
+def get_common_context(request: Request) -> dict:
+    """Get common template context including PostHog API key"""
+    return {
+        "request": request,
+        "posthog_api_key": os.getenv("POSTHOG_API_KEY", "") if os.getenv("AWS_EXECUTION_ENV") else ""
+    }
+
+
+def track_event(event_name: str):
+    """
+    Decorator to capture a PostHog event when a route is hit.
+    Works for sync and async routes, and automatically includes kwargs.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Track event for analytics
+            if settings.debug:
+                logging.getLogger(__name__).debug(f"track_event decorator called for {event_name}")
+            
+            # Call the route handler
+            if inspect.iscoroutinefunction(func):
+                response = await func(*args, **kwargs)
+            else:
+                response = func(*args, **kwargs)
+
+            try:
+                import logging
+                from ..analytics.posthog_client import capture_event, flush_events
+                
+                # Try to find Request object in args first, then in kwargs
+                request: Request | None = next((a for a in args if isinstance(a, Request)), None)
+                if not request:
+                    request = kwargs.get('request')
+                
+                if settings.debug:
+                    logging.getLogger(__name__).debug(f"Request object found: {request is not None}")
+                
+                # Skip capture if no Request object found (e.g., in tests)
+                if not request:
+                    if settings.debug:
+                        logging.getLogger(__name__).debug(f"No Request object found for {event_name}")
+                    return response
+                
+                # Skip capture if PostHog is disabled (no API key)
+                api_key = os.getenv("POSTHOG_API_KEY")
+                if not api_key:
+                    logging.getLogger(__name__).warning(f"PostHog disabled: No API key for event {event_name}")
+                    return response
+                
+                props = {}
+
+                if request:
+                    # Sanitize user agent to prevent very long strings
+                    user_agent = request.headers.get("user-agent", "")
+                    if len(user_agent) > 300:
+                        user_agent = user_agent[:300] + "..."
+                    
+                    props.update({
+                        "path": str(request.url.path),
+                        "method": request.method,
+                        "$current_url": str(request.url),
+                        "$referrer": request.headers.get("referer", ""),
+                        "user_agent": user_agent
+                    })
+                    # Optional anonymized IP
+                    client_ip = request.client.host if request.client else None
+                    if client_ip:
+                        ip_parts = client_ip.split(".")
+                        if len(ip_parts) == 4:
+                            ip_parts[-1] = "0"
+                            props["ip_anonymized"] = ".".join(ip_parts)
+                        else:
+                            props["ip_anonymized"] = client_ip  # leave unchanged if IPv6
+
+                props.update(kwargs)  # add route kwargs automatically
+
+                # Add session_id from middleware to all events
+                if hasattr(request.state, 'session_id'):
+                    props["session_id"] = request.state.session_id
+                    logging.getLogger(__name__).info(f"Found session_id: {request.state.session_id} for event {event_name}")
+                else:
+                    logging.getLogger(__name__).warning(f"No session_id found for event {event_name}")
+
+                if event_name == "chat_message":
+                    text = kwargs.get("text", "")
+                    props.update({
+                        "text": text[:200] if text else None,  # capture first 200 chars
+                        "text_length": len(text) if text else 0,
+                        "voice_style": kwargs.get("voice_style", "normal")
+                    })
+                elif event_name == "page_blog_post":
+                    # Add blog post metadata with error handling
+                    slug = kwargs.get("slug", "")
+                    if slug:
+                        try:
+                            journal_entries = load_journal_entries()
+                            target_entry = next((entry for entry in journal_entries if entry['slug'] == slug), None)
+                            if target_entry:
+                                props.update({
+                                    "slug": slug,
+                                    "title": target_entry.get("title", ""),
+                                    "blog_post": True
+                                })
+                        except Exception as e:
+                            # Log warning but don't crash the route
+                            import logging
+                            logging.getLogger(__name__).warning(f"Failed to load journal entries for blog post {slug}: {e}")
+                            # If we can't load entries, just add the slug
+                            props.update({
+                                "slug": slug,
+                                "blog_post": True
+                            })
+
+                # Use session_id as distinct_id for user tracking
+                distinct_id = request.state.session_id if hasattr(request.state, 'session_id') else None
+                logging.getLogger(__name__).info(f"Capturing {event_name} event for session {distinct_id}")
+                
+                try:
+                    capture_event(event_name=event_name, properties=props, distinct_id=distinct_id)
+                    flush_events()
+                except Exception as capture_error:
+                    logging.getLogger(__name__).error(f"PostHog capture failed for {event_name}: {capture_error}")
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"PostHog capture failed for {event_name}: {e}")
+
+            return response
+        return wrapper
+    return decorator
 
 
 def generate_slug(title: str) -> str:
@@ -163,27 +298,32 @@ def load_journal_entries() -> list:
     for path in possible_paths:
         if path.exists():
             journal_dir = path
-            print(f"Found journal directory at: {journal_dir}")
+            if settings.debug:
+                print(f"Found journal directory at: {journal_dir}")
             break
     
     entries = []
     
     if not journal_dir:
-        print("Warning: No journal directory found in any expected location")
-        print(f"Searched paths: {[str(p) for p in possible_paths]}")
+        if settings.debug:
+            print("Warning: No journal directory found in any expected location")
+            print(f"Searched paths: {[str(p) for p in possible_paths]}")
         return entries
     
     # Filter out .beta.md files and load only .md files
     md_files = sorted(journal_dir.glob("*.md"), reverse=True)
-    print(f"Found {len(md_files)} markdown files in journal directory")
+    if settings.debug:
+        print(f"Found {len(md_files)} markdown files in journal directory")
     
     for md_file in md_files:
         # Skip .beta.md files
         if md_file.name.endswith('.beta.md'):
-            print(f"Skipping beta file: {md_file.name}")
+            if settings.debug:
+                print(f"Skipping beta file: {md_file.name}")
             continue
         
-        print(f"Processing journal file: {md_file.name}")
+        if settings.debug:
+            print(f"Processing journal file: {md_file.name}")
         try:
             with open(md_file, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -218,8 +358,14 @@ def load_journal_entries() -> list:
                 blog_title = md_file.stem.replace('-', ' ').title()
                 nav_title = md_file.stem.replace('-', ' ').title()
             
-            # Convert markdown to HTML
-            html_content = markdown.markdown(content)
+            # Convert markdown to HTML with error handling
+            try:
+                html_content = markdown.markdown(content)
+            except Exception as e:
+                if settings.debug:
+                    print(f"Warning: Markdown conversion failed for {md_file.name}: {e}")
+                # Fallback to plain text if markdown fails
+                html_content = f"<pre>{content}</pre>"
             
             # Generate slug for URL
             slug = generate_slug(blog_title)
@@ -240,16 +386,37 @@ def load_journal_entries() -> list:
                 'meta_description': meta_description  # SEO meta description
             })
         except Exception as e:
-            print(f"Error loading {md_file}: {e}")
+            if settings.debug:
+                print(f"Error loading {md_file}: {e}")
             continue
     
     return entries
 
 
+# Home page route
+
 @router.get("/", response_class=HTMLResponse)
+@track_event("page_home")
 def index(request: Request) -> HTMLResponse:
     """Serve the main chat interface"""
-    return templates.TemplateResponse("chat.html", {"request": request})
+    """Serve the main chat interface"""
+    try:
+        if settings.debug:
+            logging.getLogger(__name__).debug("Home page route called")
+        context = get_common_context(request)
+        return templates.TemplateResponse("chat.html", context)
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Error in home page route: {e}")
+        raise
+
+
+# Add a test route for the exact same path to see if there's a conflict
+@router.get("/test-home")
+def test_home(request: Request) -> HTMLResponse:
+    """Test route to verify home page logic works"""
+    print("TEST_HOME_DEBUG: Test home route called")
+    context = get_common_context(request)
+    return templates.TemplateResponse("chat.html", context)
 
 
 @router.get("/favicon.ico")
@@ -295,18 +462,24 @@ def license(request: Request) -> HTMLResponse:
 
 
 @router.get("/blog", response_class=HTMLResponse)
+@track_event("page_blog")
 def blog(request: Request) -> HTMLResponse:
     """Serve the dev journal page"""
+    if settings.debug:
+        logging.getLogger(__name__).debug("Blog page route called")
     journal_entries = load_journal_entries()
     return templates.TemplateResponse("blog.html", {
-        "request": request,
+        **get_common_context(request),
         "journal_entries": journal_entries
     })
 
 
 @router.get("/blog/{slug}", response_class=HTMLResponse)
+@track_event("page_blog_post")
 def blog_post(request: Request, slug: str) -> HTMLResponse:
     """Serve blog page with specific article highlighted"""
+    if settings.debug:
+        logging.getLogger(__name__).debug(f"Blog post route called for slug: {slug}")
     journal_entries = load_journal_entries()
     
     # Find the entry with matching slug
@@ -320,7 +493,7 @@ def blog_post(request: Request, slug: str) -> HTMLResponse:
         raise HTTPException(status_code=404, detail="Blog post not found")
     
     return templates.TemplateResponse("blog.html", {
-        "request": request,
+        **get_common_context(request),
         "journal_entries": journal_entries,
         "target_slug": slug  # Pass the target slug to highlight the correct article
     })
@@ -364,28 +537,40 @@ def sitemap_xml():
     )
 
 
+# Privacy policy route
+
 @router.get("/privacy", response_class=HTMLResponse)
+@track_event("page_privacy")
 def privacy_policy(request: Request) -> HTMLResponse:
     """Serve privacy policy page"""
-    return templates.TemplateResponse("privacy.html", {
-        "request": request,
-        "title": "Privacy Policy"
-    })
+    """Serve privacy policy page"""
+    try:
+        if settings.debug:
+            logging.getLogger(__name__).debug("Privacy page route called")
+        context = get_common_context(request)
+        return templates.TemplateResponse("privacy.html", {
+            **context,
+            "title": "Privacy Policy"
+        })
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Error in privacy page route: {e}")
+        raise
 
 
 @router.get("/terms", response_class=HTMLResponse)
+@track_event("page_terms")
 def terms_of_service(request: Request) -> HTMLResponse:
     """Serve terms of service page"""
     return templates.TemplateResponse("terms.html", {
-        "request": request,
+        **get_common_context(request),
         "title": "Terms of Service"
     })
 
 
 @router.post("/chat")
+@track_event("chat_message")
 async def chat(
     request: Request,
-    session_id: str | None = Form(None),
     text: str | None = Form(None),
     session_state: str | None = Form(None),
     voice_style: str | None = Form("normal")
@@ -396,21 +581,26 @@ async def chat(
     - If HX-Request header is present (HTMX), returns HTML fragment
     - Otherwise, returns JSON response
     """
+    # Get session_id from middleware
+    session_id = getattr(request.state, 'session_id', None)
+    
     # Use request ID from middleware or generate one
     request_id = getattr(request.state, 'request_id', str(uuid.uuid4())[:8])
     
-    debug_logger.log_route(
-        request_id,
-        f"Received chat request - Session: {session_id}, Text: '{text[:50] if text else 'None'}{'...' if text and len(text) > 50 else ''}', Voice: {voice_style}",
-        request
-    )
-    
-    if not session_id or not text:
+    if settings.debug:
         debug_logger.log_route(
             request_id,
-            f"Missing required parameters - session_id: {session_id}, text: {text}",
+            f"Received chat request - Session: {session_id}, Text: '{text[:50] if text else 'None'}{'...' if text and len(text) > 50 else ''}', Voice: {voice_style}",
             request
         )
+    
+    if not session_id or not text:
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                f"Missing required parameters - session_id: {session_id}, text: {text}",
+                request
+            )
         raise HTTPException(status_code=400, detail="session_id and text are required")
     
     # Parse session state if provided
@@ -419,31 +609,35 @@ async def chat(
         try:
             import json
             parsed_session_state = json.loads(session_state)
-            debug_logger.log_route(
-                request_id,
-                f"Received session state: {str(parsed_session_state)[:200]}{'...' if len(str(parsed_session_state)) > 200 else ''}",
-                request
-            )
+            if settings.debug:
+                debug_logger.log_route(
+                    request_id,
+                    f"Received session state: {str(parsed_session_state)[:200]}{'...' if len(str(parsed_session_state)) > 200 else ''}",
+                    request
+                )
         except json.JSONDecodeError as e:
-            debug_logger.log_route(
-                request_id,
-                f"Failed to parse session state JSON: {e}. Raw: {session_state[:100]}...",
-                request
-            )
+            if settings.debug:
+                debug_logger.log_route(
+                    request_id,
+                    f"Failed to parse session state JSON: {e}. Raw: {session_state[:100]}...",
+                    request
+                )
             parsed_session_state = None
     else:
-        debug_logger.log_route(
-            request_id,
-            "No session state provided - starting new conversation",
-            request
-        )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                "No session state provided - starting new conversation",
+                request
+            )
     
     # Process chat through service layer
-    debug_logger.log_route(
-        request_id,
-        f"Calling chat_service.process_chat for session {session_id}",
-        request
-    )
+    if settings.debug:
+        debug_logger.log_route(
+            request_id,
+            f"Calling chat_service.process_chat for session {session_id}",
+            request
+        )
     response_text, updated_session_state = await chat_service.process_chat(
         request_id=request_id,
         session_id=session_id,
@@ -452,80 +646,97 @@ async def chat(
         voice_style=voice_style,
         request=request
     )
-    debug_logger.log_route(
-        request_id,
-        f"Chat service completed for session {session_id}",
-        request
-    )
+    if settings.debug:
+        debug_logger.log_route(
+            request_id,
+            f"Chat service completed for session {session_id}",
+            request
+        )
     
     # Check if this is an HTMX request
     if request.headers.get("HX-Request"):
-        debug_logger.log_route(
-            request_id,
-            "Processing HTMX response",
-            request
-        )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                "Processing HTMX response",
+                request
+            )
         
         # Debug: Log the actual response text being sent to frontend
-        debug_logger.log_route(
-            request_id,
-            f"=== SENDING TO BROWSER ===",
-            request
-        )
-        debug_logger.log_route(
-            request_id,
-            f"Browser response length: {len(response_text)} characters",
-            request
-        )
-        debug_logger.log_route(
-            request_id,
-            f"Browser response content: {response_text}",
-            request
-        )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                f"=== SENDING TO BROWSER ===",
+                request
+            )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                f"Browser response length: {len(response_text)} characters",
+                request
+            )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                f"Browser response content: {response_text}",
+                request
+            )
         
         # Verify response matches what was stored in last_answer
         if updated_session_state and "last_answer" in updated_session_state:
             last_answer = updated_session_state["last_answer"]
             if response_text == last_answer:
-                debug_logger.log_route(
-                    request_id,
-                    f"✅ VERIFICATION: Browser response matches last_answer exactly",
-                    request
-                )
+                if settings.debug:
+                    debug_logger.log_route(
+                        request_id,
+                        f"✅ VERIFICATION: Browser response matches last_answer exactly",
+                        request
+                    )
             else:
-                debug_logger.log_route(
-                    request_id,
-                    f"❌ VERIFICATION FAILED: Browser response differs from last_answer",
-                    request
-                )
-                debug_logger.log_route(
-                    request_id,
-                    f"last_answer length: {len(last_answer)}, Browser length: {len(response_text)}",
-                    request
-                )
+                if settings.debug:
+                    debug_logger.log_route(
+                        request_id,
+                        f"❌ VERIFICATION FAILED: Browser response differs from last_answer",
+                        request
+                    )
+                if settings.debug:
+                    debug_logger.log_route(
+                        request_id,
+                        f"last_answer length: {len(last_answer)}, Browser length: {len(response_text)}",
+                        request
+                    )
         else:
+            if settings.debug:
+                debug_logger.log_route(
+                    request_id,
+                    f"⚠️ No last_answer found in session state for verification",
+                    request
+                )
+            
+        if settings.debug:
             debug_logger.log_route(
                 request_id,
-                f"⚠️ No last_answer found in session state for verification",
+                f"=== END BROWSER RESPONSE ===",
                 request
             )
-            
-        debug_logger.log_route(
-            request_id,
-            f"=== END BROWSER RESPONSE ===",
-            request
-        )
         
-        # Process Markdown in bot responses for formatting
+        # Process Markdown in bot responses for formatting with error handling
         import markdown
-        html_content = markdown.markdown(response_text, extensions=['nl2br'])
+        try:
+            html_content = markdown.markdown(response_text, extensions=['nl2br'])
+        except Exception as e:
+            if settings.debug:
+                print(f"Warning: Markdown conversion failed for chat response: {e}")
+            # Fallback to plain text if markdown fails
+            html_content = response_text
         
         # Debug: Log the HTML content after markdown processing
-        debug_logger.log_route(
-            request_id,
-            f"HTML content after markdown: {html_content[:200]}{'...' if len(html_content) > 200 else ''}",
-            request
-        )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                f"HTML content after markdown: {html_content[:200]}{'...' if len(html_content) > 200 else ''}",
+                request
+            )
         
         # Return only bot message for HTMX (user message is added by JavaScript)
         # Include session state as a data attribute for JavaScript to read
@@ -533,11 +744,12 @@ async def chat(
         session_state_json = json.dumps(updated_session_state) if updated_session_state else "{}"
         
         # Log session state for debugging
-        debug_logger.log_route(
-            request_id,
-            f"Returning session state: {session_state_json[:200]}{'...' if len(session_state_json) > 200 else ''}",
-            request
-        )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                f"Returning session state: {session_state_json[:200]}{'...' if len(session_state_json) > 200 else ''}",
+                request
+            )
         
         # Properly escape the JSON for HTML attribute
         import html
@@ -549,13 +761,17 @@ async def chat(
         </div>
         """)
     else:
-        debug_logger.log_route(
-            request_id,
-            "Processing JSON response",
-            request
-        )
+        if settings.debug:
+            debug_logger.log_route(
+                request_id,
+                "Processing JSON response",
+                request
+            )
         # Return JSON response for API
         return ChatResponse(
             messages=[{"contentType": "PlainText", "content": response_text}],
             session_state=updated_session_state
         )
+
+
+# Debug routes removed

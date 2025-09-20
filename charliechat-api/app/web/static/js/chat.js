@@ -1,10 +1,8 @@
-// Generate unique session ID on page load
+// Initialize page on load
 document.addEventListener('DOMContentLoaded', function() {
-  const sessionId = 'web-session-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
-  document.getElementById('session_id').value = sessionId;
+  // Session ID is now handled by server-side middleware
   // Initialize session state as empty object
   document.getElementById('session_state').value = '{}';
-  console.log('Generated session ID:', sessionId);
   
   // Initialize question counter for voice discovery
   window.questionCount = 0;

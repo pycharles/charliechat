@@ -163,5 +163,13 @@
 
     <script src="/static/js/base.js"></script>
     {% block extra_scripts %}{% endblock %}
+    
+    <!-- PostHog Analytics -->
+    {% if posthog_api_key %}
+    <script>
+      window.POSTHOG_API_KEY = "{{ posthog_api_key }}";
+    </script>
+    <script src="/static/js/posthog.js" defer></script>
+    {% endif %}
   </body>
 </html>
