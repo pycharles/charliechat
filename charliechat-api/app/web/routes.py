@@ -38,10 +38,11 @@ chat_service = ChatService(settings)
 
 
 def get_common_context(request: Request) -> dict:
-    """Get common template context including PostHog API key"""
+    """Get common template context including PostHog configuration"""
     return {
         "request": request,
-        "posthog_api_key": os.getenv("POSTHOG_API_KEY", "") if os.getenv("AWS_EXECUTION_ENV") else ""
+        "posthog_api_key": os.getenv("POSTHOG_API_KEY", "") if os.getenv("AWS_EXECUTION_ENV") else "",
+        "posthog_host": os.getenv("POSTHOG_HOST", "https://app.posthog.com") if os.getenv("AWS_EXECUTION_ENV") else ""
     }
 
 
