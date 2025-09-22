@@ -63,16 +63,30 @@ resource "aws_lambda_function" "feedback_lambda" {
   filename         = data.archive_file.feedback_lambda_zip.output_path
   function_name    = "charlie-feedback-lambda"
   role            = aws_iam_role.feedback_lambda_role.arn
-  handler         = "lambda_feedback.lambda_handler"
+  handler         = "newrelic_lambda_wrapper.handler"
   runtime         = "python3.11"
   timeout         = 30
   memory_size     = 128
-  source_code_hash = data.archive_file.feedback_lambda_zip.output_base64sha256
+  source_code_hash = filebase64sha256("../charliechat-api/feedback-lambda-deployment.zip")
+
+  # New Relic Lambda Layer (required for monitoring)
+  layers = [
+    "arn:aws:lambda:${data.dotenv.env.env["AWS_REGION"]}:${data.dotenv.env.env["AWS_ACCOUNT"]}:layer:NewRelicPython311:56"
+  ]
 
   environment {
     variables = {
       FEEDBACK_SENDER_EMAIL    = data.dotenv.env.env["FEEDBACK_SENDER_EMAIL"]
       FEEDBACK_RECIPIENT_EMAIL = data.dotenv.env.env["FEEDBACK_RECIPIENT_EMAIL"]
+
+      # New Relic Configuration (Layer-based monitoring)
+      NEW_RELIC_ACCOUNT_ID                    = data.dotenv.env.env["NEW_RELIC_ACCOUNT_ID"]
+      NEW_RELIC_LAMBDA_EXTENSION_ENABLED      = data.dotenv.env.env["NEW_RELIC_LAMBDA_EXTENSION_ENABLED"]
+      NEW_RELIC_LAMBDA_HANDLER                = "lambda_feedback.lambda_handler"  # Original handler for layer wrapper
+      NEW_RELIC_EXTENSION_SEND_EXTENSION_LOGS = data.dotenv.env.env["NEW_RELIC_EXTENSION_SEND_EXTENSION_LOGS"]
+      NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS  = data.dotenv.env.env["NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS"]
+      NEW_RELIC_LICENSE_KEY                   = data.dotenv.env.env["NEW_RELIC_LICENSE_KEY"]
+      NEW_RELIC_DATA_COLLECTION_TIMEOUT       = data.dotenv.env.env["NEW_RELIC_DATA_COLLECTION_TIMEOUT"]
     }
   }
 

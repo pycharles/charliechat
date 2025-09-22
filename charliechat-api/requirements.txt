@@ -8,3 +8,4 @@ python-multipart==0.0.20
 mangum==0.19.0
 Markdown==3.9
 posthog==6.7.5
+newrelic-lambda-cli==0.9.15

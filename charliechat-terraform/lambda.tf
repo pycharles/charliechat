@@ -39,11 +39,16 @@ resource "aws_lambda_function" "charlie_api" {
   filename         = "../charliechat-api/lambda-deployment.zip"
   function_name    = "charlie-chat-api"
   role            = aws_iam_role.lambda_execution_role.arn
-  handler         = "lambda_api.lambda_api.handler"
+  handler         = "newrelic_lambda_wrapper.handler"
   runtime         = "python3.11"
   timeout         = 60
   memory_size     = 256
   source_code_hash = filebase64sha256("../charliechat-api/lambda-deployment.zip")
+  
+  # New Relic Lambda Layer (required for monitoring)
+  layers = [
+    "arn:aws:lambda:${data.dotenv.env.env["AWS_REGION"]}:${data.dotenv.env.env["AWS_ACCOUNT"]}:layer:NewRelicPython311:56"
+  ]
 
   environment {
     variables = {
@@ -66,6 +71,15 @@ resource "aws_lambda_function" "charlie_api" {
       # POSTHOG_HOST: PostHog host URL (optional, defaults to app.posthog.com)
       POSTHOG_API_KEY      = data.dotenv.env.env["POSTHOG_API_KEY"]
       POSTHOG_HOST         = data.dotenv.env.env["POSTHOG_HOST"]
+
+      # New Relic Configuration (Layer-based monitoring)
+      NEW_RELIC_ACCOUNT_ID                    = data.dotenv.env.env["NEW_RELIC_ACCOUNT_ID"]
+      NEW_RELIC_LAMBDA_EXTENSION_ENABLED      = data.dotenv.env.env["NEW_RELIC_LAMBDA_EXTENSION_ENABLED"]
+      NEW_RELIC_LAMBDA_HANDLER                = "lambda_api.lambda_api.handler"  # Original handler for layer wrapper
+      NEW_RELIC_EXTENSION_SEND_EXTENSION_LOGS = data.dotenv.env.env["NEW_RELIC_EXTENSION_SEND_EXTENSION_LOGS"]
+      NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS  = data.dotenv.env.env["NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS"]
+      NEW_RELIC_LICENSE_KEY                   = data.dotenv.env.env["NEW_RELIC_LICENSE_KEY"]
+      NEW_RELIC_DATA_COLLECTION_TIMEOUT       = data.dotenv.env.env["NEW_RELIC_DATA_COLLECTION_TIMEOUT"]
     }
   }
 
