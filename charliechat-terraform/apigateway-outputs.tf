@@ -22,14 +22,17 @@ output "dns_instructions" {
   value = <<-EOT
     DNS Configuration:
     
-    Primary domain: charlesob.com (points to API Gateway)
-    Redirect domain: www.charlesob.com (redirects to charlesob.com)
+    Primary domain: charlesob.com (points to CloudFront -> API Gateway)
+    WWW domain: www.charlesob.com (points to CloudFront -> API Gateway)
     
-    Route53 will handle both domains automatically:
-    - charlesob.com -> API Gateway (A record alias)
-    - www.charlesob.com -> charlesob.com (CNAME record)
+    Route53 will handle both domains with CloudFront distributions:
+    - charlesob.com -> CloudFront -> API Gateway (A record alias)
+    - www.charlesob.com -> CloudFront -> API Gateway (A record alias)
     
-    The application will redirect www.charlesob.com requests to charlesob.com
+    CloudFront provides:
+    - HTTP to HTTPS automatic redirect
+    - Both port 80 and 443 support
+    - Enhanced performance and caching
   EOT
-  description = "DNS configuration summary"
+  description = "DNS configuration summary with CloudFront"
 }
