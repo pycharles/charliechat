@@ -394,6 +394,12 @@ footer {
   margin-bottom: 0;
 }
 
+.bio-resume-btn:hover {
+  background: #4338ca !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
 .main-content {
   width: 100%;
   max-width: 720px;
@@ -1460,20 +1466,24 @@ footer {
   max-width: 720px;
   margin: 0 auto;
   text-align: center;
-  color: #6b7280;
+  color: #abb1bf;
   font-size: 11px;
   padding: 8px 0;
   line-height: 1.2;
 }
 footer p {
   margin: 0 0 8px 0;
+  color: #abb1bf;
 }
 footer a {
-  color: #6b7280;
+  color: #abb1bf;
   text-decoration: underline;
 }
 footer a:hover {
-  color: #374151;
+  color: #e5e7eb;
+}
+footer nav {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 footer nav a {
   margin: 0 12px;
