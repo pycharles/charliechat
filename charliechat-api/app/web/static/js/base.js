@@ -29,6 +29,37 @@ function initBioModal() {
   window.openBioModal = openBioModal;
 }
 
+// FAQ modal functionality
+function initFaqModal() {
+  const faqModal = document.getElementById('faq-modal');
+  const faqOverlay = document.getElementById('faq-modal-overlay');
+  const faqClose = document.getElementById('faq-modal-close');
+  
+  function openFaqModal() {
+    faqModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+  
+  function closeFaqModal() {
+    faqModal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+  }
+  
+  // Event listeners
+  faqOverlay.addEventListener('click', closeFaqModal);
+  faqClose.addEventListener('click', closeFaqModal);
+  
+  // Close modal with Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && faqModal.style.display === 'flex') {
+      closeFaqModal();
+    }
+  });
+  
+  // Make openFaqModal globally available
+  window.openFaqModal = openFaqModal;
+}
+
 // Contact functionality
 function initContact() {
   function openContactModal() {
@@ -97,6 +128,9 @@ function initNavbar() {
       if (targetTab === 'bio') {
         openBioModal();
         return; // Don't change active states for modal actions
+      } else if (targetTab === 'faq') {
+        openFaqModal();
+        return; // Don't change active states for modal actions
       } else if (targetTab === 'contact') {
         openContactModal();
         return; // Don't change active states for modal actions
@@ -110,10 +144,12 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
     initNavbar();
     initBioModal();
+    initFaqModal();
     initContact();
   });
 } else {
   initNavbar();
   initBioModal();
+  initFaqModal();
   initContact();
 }

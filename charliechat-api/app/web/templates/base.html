@@ -71,6 +71,7 @@
           <a href="/" class="nav-link{% if request.url.path == '/' %} active{% endif %}" data-tab="chat">Chat</a>
           <a href="#" class="nav-link" data-tab="bio">Bio</a>
           <a href="/blog" class="nav-link{% if request.url.path.startswith('/blog') %} active{% endif %}">Dev Journal</a>
+          <a href="#" class="nav-link" data-tab="faq">FAQ</a>
           <a href="#" class="nav-link" data-tab="contact">Contact</a>
         </nav>
       </header>
@@ -123,6 +124,40 @@
               View Full Resume
             </a>
           </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ Modal -->
+    <div class="faq-modal" id="faq-modal">
+      <div class="faq-modal-overlay" id="faq-modal-overlay"></div>
+      <div class="faq-modal-content">
+        <div class="faq-modal-header">
+          <h3>Frequently Asked Questions</h3>
+          <button class="faq-modal-close" id="faq-modal-close" aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+              <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="faq-content">
+          <h3>What is Charlie Chat?</h3>
+          <p>Charlie Chat is an interactive AI chatbot, trained on my resume, that lets you explore my background through natural conversation.</p>
+
+          <h3>How do I use it?</h3>
+          <p>Type a question about my career, leadership style, technical experience, or projects and Charlie Chat will respond as if we are chatting in real time.</p>
+
+          <h3>Why did you build it?</h3>
+          <p>I built Charlie Chat to experiment with AI, demonstrate how I solve problems end to end, and create a unique way to stand out as I search for my next leadership opportunity.</p>
+
+          <h3>What's under the hood?</h3>
+          <p>Charlie Chat runs on a fully serverless backend using AWS Bedrock and Python (FastAPI). The entire architecture is deployed with infrastructure-as-code using Terraform.</p>
+
+          <h3>Where can I learn more?</h3>
+          <p>Visit the Dev Journal section to see how this project was designed, built and improved over time.</p>
+
+          <h3>Are you open to work?</h3>
+          <p>Yes. I am seeking IT leadership roles focused on security, infrastructure, IT transformation or product strategy.</p>
         </div>
       </div>
     </div>

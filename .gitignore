@@ -219,3 +219,4 @@ lambda_package/
 
 # Ignore LLM training data
 training-data/
+*.pdf
