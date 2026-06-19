@@ -50,7 +50,7 @@ The application uses environment variables for configuration. See the [root .env
 - `AWS_REGION` - AWS region (e.g., "us-east-1")
 
 ### Optional Variables
-- `BEDROCK_MODEL_ID` - Claude model (default: "anthropic.claude-3-haiku-20240307-v1:0")
+- `BEDROCK_MODEL_ID` - Claude model (default: "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 - `BEDROCK_MAX_TOKENS` - Response length (default: "500")
 - `BEDROCK_KB_ID` - Knowledge Base ID for enhanced context
 - `SYSTEM_PROMPT_TEMPLATE` - Custom AI personality

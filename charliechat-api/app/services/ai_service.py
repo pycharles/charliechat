@@ -12,15 +12,50 @@ import re
 from typing import Dict, Any, Optional, Tuple
 from ..utils.debug_logger import debug_logger
 
+# Models to try in preference order (newest/best first, haiku as final fallback).
+# When AWS adds a new Claude version, prepend it here. The first one that responds
+# successfully on cold start is cached for the lifetime of that Lambda container.
+_CANDIDATE_MODELS = [
+    "us.anthropic.claude-sonnet-4-6",
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+]
+
+# Module-level cache so the probe only runs once per Lambda cold start.
+_resolved_model_id: Optional[str] = None
+
+
+def _probe_models(runtime_client) -> str:
+    """Invoke each candidate with a minimal prompt; return the first that works."""
+    global _resolved_model_id
+    if _resolved_model_id:
+        return _resolved_model_id
+
+    probe_body = json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 5,
+        "messages": [{"role": "user", "content": "hi"}],
+    })
+    for model_id in _CANDIDATE_MODELS:
+        try:
+            runtime_client.invoke_model(modelId=model_id, body=probe_body)
+            debug_logger.log_ai("MODEL_PROBE", f"Auto-selected model: {model_id}", None)
+            _resolved_model_id = model_id
+            return model_id
+        except Exception:
+            continue
+
+    # All candidates failed — return the last one and let the real call surface the error.
+    _resolved_model_id = _CANDIDATE_MODELS[-1]
+    return _resolved_model_id
+
 
 class AIService:
     """Service for AI integration with AWS Bedrock"""
     
     def __init__(self):
         """Initialize the AI service with environment configuration"""
-        # Environment-driven configuration
-        self.model_id = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
-        self.max_tokens = int(os.getenv("BEDROCK_MAX_TOKENS", "500"))  # Reduced default
+        self.max_tokens = int(os.getenv("BEDROCK_MAX_TOKENS", "500"))
         self.default_person = os.getenv("DEFAULT_PERSON", "Charles")
         self.debug_logging = os.getenv("DEBUG_LOGGING", "false").lower() == "true"
         
@@ -37,6 +72,10 @@ class AIService:
         # Initialize Bedrock clients
         self.bedrock_client = boto3.client("bedrock-runtime")
         self.bedrock_agent_client = boto3.client("bedrock-agent-runtime")
+
+        # Resolve model: use explicit override if set, otherwise auto-probe candidates.
+        explicit = os.getenv("BEDROCK_MODEL_ID")
+        self.model_id = explicit if explicit else _probe_models(self.bedrock_client)
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt template"""
